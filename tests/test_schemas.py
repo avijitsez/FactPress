@@ -239,3 +239,18 @@ def test_validate_spec_for_facts_sparkline_false_with_no_series_passes():
     spec = DesignSpec(**_valid_spec_kwargs(sparkline=False))
     facts = DailyPnlFacts(daily_pnl_pct=1.0, equity=100.0, win_rate_pct=50.0)
     validate_spec_for_facts(spec, facts)
+
+
+@pytest.mark.parametrize(
+    "sneaky",
+    [
+        "Portfolio up ⑨⑨⑨ percent",  # circled digits (category No)
+        "Up Ⅲ points",  # roman numeral III (category Nl)
+        "Gained ½ of target",  # vulgar fraction 1/2 (category No)
+        "Up ¹² percent",  # superscript digits (category No)
+        "Up ٩ points",  # Arabic-Indic digit nine (category Nd)
+    ],
+)
+def test_digit_ban_covers_all_unicode_numerals(sneaky):
+    with pytest.raises(ValidationError, match="digits are forbidden"):
+        DesignSpec(**_valid_spec_kwargs(headline=sneaky))

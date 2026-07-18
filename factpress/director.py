@@ -200,9 +200,12 @@ class Director:
     ) -> DesignSpec:
         """Direct a :class:`DesignSpec` for ``facts``.
 
-        NEVER raises: on any failure (schema, facts cross-reference, catalog
-        mismatch, non-JSON reply, or transport error) after one retry, this
-        returns :func:`fallback_spec` instead.
+        Never raises *due to LLM behavior*: on any failure (schema, facts
+        cross-reference, catalog mismatch, non-JSON reply, or transport
+        error) after one retry, this returns :func:`fallback_spec` instead.
+        Unrenderable inputs still raise — :func:`fallback_spec` itself
+        raises ``ValueError`` for facts with no numeric metric keys, since
+        no spec could render them.
         """
         messages: list[dict[str, str]] = [
             {"role": "system", "content": _build_system_prompt(catalog_entry, brandkit)},

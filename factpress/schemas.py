@@ -19,21 +19,20 @@ Three-stage separation, encoded as types:
   rendered copy, and are never shown to an end user.
 
 - Hard digit ban: any LLM-authored copy field (``headline``, ``subhead``,
-  ``caption``, ``emoji``) rejects any string containing a digit (``\\d``) at
-  validation time. Numerals only ever enter the rendered image through the
-  renderer's own formatting of facts, never through LLM prose.
+  ``caption``, ``emoji``) rejects any string containing a numeral — any
+  character in a Unicode numeral category (Nd/Nl/No), not merely ASCII
+  digits — at validation time. Numerals only ever enter the rendered image
+  through the renderer's own formatting of facts, never through LLM prose.
 """
 
 from __future__ import annotations
 
-import re
+import unicodedata
 from datetime import datetime
 from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-_DIGIT_RE = re.compile(r"\d")
 
 _DIGIT_BAN_MESSAGE = (
     "digits are forbidden in LLM-authored copy; "
@@ -42,9 +41,18 @@ _DIGIT_BAN_MESSAGE = (
 
 
 def _reject_digits(value: str | None) -> str | None:
-    """Shared validator body: raise if `value` contains any digit character."""
-    if value is not None and _DIGIT_RE.search(value):
-        raise ValueError(_DIGIT_BAN_MESSAGE)
+    """Shared validator body: raise if `value` contains any numeral character.
+
+    Checks the Unicode category, not just ``\\d`` (category Nd): circled
+    digits like ⑨ (No), roman numerals like Ⅲ (Nl), fractions and
+    superscripts are numerals too, and a numeral-shaped hallucination must
+    never reach rendered copy through any of them.
+    """
+    if value is None:
+        return value
+    for ch in value:
+        if unicodedata.category(ch).startswith("N"):
+            raise ValueError(_DIGIT_BAN_MESSAGE)
     return value
 
 
