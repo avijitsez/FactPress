@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+import unicodedata
 from dataclasses import dataclass
 from typing import Any
 
@@ -36,7 +37,8 @@ from factpress.schemas import (
 
 logger = logging.getLogger("factpress.director")
 
-_EMPHASIS_CANDIDATES = ("win_rate_pct", "trades_count")
+_HERO_CANDIDATES = ("daily_pnl_pct", "pnl_pct", "fill_price")
+_EMPHASIS_CANDIDATES = ("win_rate_pct", "trades_count", "qty", "pnl_abs")
 _CALLOUT_CANDIDATES = ("equity",)
 
 _SYSTEM_PROMPT_TEMPLATE = """You are the creative director for FactPress, an automated \
@@ -318,12 +320,18 @@ def fallback_spec(
             "facts contain no numeric metric fields; cannot choose a hero metric"
         )
 
-    if "daily_pnl_pct" in metric_keys:
-        hero_metric_key = "daily_pnl_pct"
+    for preferred in _HERO_CANDIDATES:
+        if preferred in metric_keys:
+            hero_metric_key = preferred
+            break
     else:
         hero_metric_key = sorted(metric_keys)[0]
 
-    emphasis_keys = [key for key in _EMPHASIS_CANDIDATES if key in metric_keys][:2]
+    emphasis_keys = [
+        key
+        for key in _EMPHASIS_CANDIDATES
+        if key in metric_keys and key != hero_metric_key
+    ][:2]
     callout_keys = [key for key in _CALLOUT_CANDIDATES if key in metric_keys]
 
     # The fallback must be valid by construction against
@@ -331,16 +339,27 @@ def fallback_spec(
     series = getattr(facts, "series", None)
     sparkline = isinstance(series, list) and len(series) >= 2
 
+    # Variant and headline must be valid for THIS template, not assume
+    # daily_pnl: "default" is only used when the manifest declares it, and
+    # the headline is derived from the template's display name (stripped of
+    # any numeral characters so it can never trip the digit ban).
+    variants = list(manifest.get("variants") or ["default"])
+    variant = "default" if "default" in variants else variants[0]
+
+    name = str(manifest.get("name") or "").strip()
+    name = "".join(ch for ch in name if not unicodedata.category(ch).startswith("N")).strip()
+    headline = f"{name} update" if name else "Update"
+
     return DesignSpec(
         template_id=manifest["id"],
         template_version=str(manifest["version"]),
-        variant="default",
+        variant=variant,
         tone=Tone.NEUTRAL,
         palette_id=manifest["palettes_allowed"][0],
         hero_metric_key=hero_metric_key,
         emphasis_keys=emphasis_keys,
         callout_keys=callout_keys,
-        headline="Daily P&L update",
+        headline=headline,
         subhead=None,
         caption=None,
         sparkline=sparkline,

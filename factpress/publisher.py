@@ -159,12 +159,21 @@ class Publisher:
         with httpx.Client(**client_kwargs) as client:
             attempt = 0
             while True:
-                response = client.post(
-                    self._endpoint(),
-                    data=data,
-                    files=files,
-                    timeout=self.config.timeout_s,
-                )
+                try:
+                    response = client.post(
+                        self._endpoint(),
+                        data=data,
+                        files=files,
+                        timeout=self.config.timeout_s,
+                    )
+                except httpx.HTTPError as exc:
+                    # httpx exception text can embed the request URL, which
+                    # contains the bot token — sanitize before re-raising so
+                    # the token can never reach logs or tracebacks.
+                    sanitized = str(exc).replace(self.config.token, "***")
+                    raise PublishError(
+                        0, f"transport error: {type(exc).__name__}: {sanitized}"
+                    ) from None
                 if response.status_code == 200:
                     payload = response.json()
                     message_id = payload["result"]["message_id"]

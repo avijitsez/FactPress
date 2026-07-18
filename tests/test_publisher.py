@@ -236,3 +236,17 @@ def test_multipart_body_contains_png_bytes():
     publisher = make_publisher(telegram)
     publisher.send_photo(PNG_BYTES)
     assert PNG_BYTES in telegram.requests[0].content
+
+
+def test_transport_error_raises_publish_error_without_token(monkeypatch):
+    def exploding_handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError(f"failed to reach {request.url}", request=request)
+
+    publisher = Publisher(
+        PublisherConfig(token="SECRET123", default_chat_id=1, max_retries=1),
+        transport=httpx.MockTransport(exploding_handler),
+    )
+    with pytest.raises(PublishError) as excinfo:
+        publisher.send_photo(b"\x89PNG fake")
+    assert "SECRET123" not in str(excinfo.value)
+    assert "SECRET123" not in repr(excinfo.value)

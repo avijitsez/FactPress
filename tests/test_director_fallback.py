@@ -183,3 +183,25 @@ def test_fallback_spec_never_promises_impossible_sparkline(entry, brandkit):
 
     with_series = make_facts()
     assert fallback_spec(with_series, manifest=entry, brandkit=brandkit).sparkline is True
+
+
+def test_fallback_spec_is_valid_for_non_daily_pnl_templates(brandkit):
+    from factpress.director import _catalog_violations
+    from factpress.schemas import TradeExecutedFacts
+
+    trade_entry = catalog_entry(REPO / "templates" / "trade_executed")
+    facts = TradeExecutedFacts(
+        symbol="AAPL", side="buy", qty=150.0, fill_price=189.42,
+        plan_target_pct=8.5, plan_stop_pct=-3.0,
+    )
+    spec = fallback_spec(facts, manifest=trade_entry, brandkit=brandkit)
+    assert spec.variant in trade_entry["variants"]
+    assert spec.headline != "Daily P&L update"
+    assert _catalog_violations(spec, trade_entry) == []
+    validate_spec_for_facts(spec, facts)  # must not raise
+
+
+def test_fallback_spec_daily_pnl_headline_unchanged(entry, brandkit):
+    spec = fallback_spec(make_facts(), manifest=entry, brandkit=brandkit)
+    assert spec.headline == "Daily P&L update"
+    assert spec.variant == "default"
