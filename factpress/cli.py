@@ -1,12 +1,11 @@
 """Command-line interface for FactPress: the zero-LLM render path (F0.8).
 
-``factpress render facts.json --out out.png`` builds a deterministic default
-``DesignSpec`` from the facts -- no LLM involved -- and renders a PNG
-end to end. ``default_spec`` is kept as a clean, standalone function so
-F1's ``director.py`` can lift it as the seed of its ``fallback_spec``: tone
-intelligence and richer hero-metric heuristics become the director's job
-then. Here every choice is the simplest deterministic one that satisfies
-the ``DesignSpec`` schema.
+``factpress render facts.json --out out.png`` builds a deterministic
+``DesignSpec`` from the facts via ``factpress.director.fallback_spec`` --
+no LLM involved -- and renders a PNG end to end. ``fallback_spec`` lives in
+``director.py`` (F1.2) since it is also the director's guaranteed-safe
+worst case; here every choice is the simplest deterministic one that
+satisfies the ``DesignSpec`` schema.
 """
 
 from __future__ import annotations
@@ -17,68 +16,20 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
 
 from pydantic import ValidationError
 
+from factpress.director import fallback_spec
 from factpress.renderer.engine_svg import load_brandkit, load_manifest, render_png
-from factpress.schemas import DailyPnlFacts, DesignSpec, FactPayload, Tone
+from factpress.schemas import DailyPnlFacts, FactPayload
 
 # factpress/cli.py -> parent is the `factpress` package dir, parent.parent is
 # the repo root. This resolves templates/brandkits for an in-repo checkout;
 # resolving them for a packaged (pip-installed) distribution is a later phase.
 _PACKAGE_PARENT = Path(__file__).resolve().parent.parent
 
-_EMPHASIS_CANDIDATES = ("win_rate_pct", "trades_count")
-_CALLOUT_CANDIDATES = ("equity",)
-
-
 class _CliError(Exception):
     """A user-facing CLI error: caught in `main`, printed, exit code 2."""
-
-
-def default_spec(
-    facts: FactPayload, manifest: dict[str, Any], brandkit: dict[str, Any]
-) -> DesignSpec:
-    """Build the deterministic, zero-LLM default `DesignSpec` for `facts`.
-
-    This is the seed of F1's `fallback_spec` (PLAN.md F0.8): tone
-    intelligence is the director's job in F1 (here tone is always
-    `Tone.NEUTRAL`); hero-metric/emphasis/callout selection here is the
-    simplest heuristic that satisfies the schema, not a creative choice.
-
-    `brandkit` is accepted (and unused) to keep the signature stable for
-    when F1 lifts this into `director.py`, where brand-aware defaults may
-    be needed.
-    """
-    metric_keys = facts.metric_keys()
-    if not metric_keys:
-        raise ValueError(
-            "facts contain no numeric metric fields; cannot choose a hero metric"
-        )
-
-    if "daily_pnl_pct" in metric_keys:
-        hero_metric_key = "daily_pnl_pct"
-    else:
-        hero_metric_key = sorted(metric_keys)[0]
-
-    emphasis_keys = [key for key in _EMPHASIS_CANDIDATES if key in metric_keys][:2]
-    callout_keys = [key for key in _CALLOUT_CANDIDATES if key in metric_keys]
-
-    return DesignSpec(
-        template_id=manifest["id"],
-        template_version=str(manifest["version"]),
-        variant="default",
-        tone=Tone.NEUTRAL,
-        palette_id=manifest["palettes_allowed"][0],
-        hero_metric_key=hero_metric_key,
-        emphasis_keys=emphasis_keys,
-        callout_keys=callout_keys,
-        headline="Daily P&L update",
-        subhead=None,
-        caption=None,
-        sparkline=True,
-    )
 
 
 def _load_facts(path: Path) -> FactPayload:
@@ -156,7 +107,7 @@ def _cmd_render(args: argparse.Namespace) -> int:
         return 2
 
     try:
-        spec = default_spec(facts, manifest, brandkit)
+        spec = fallback_spec(facts, manifest, brandkit)
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
