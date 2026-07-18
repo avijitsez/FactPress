@@ -1,0 +1,12 @@
+{
+  "event_type": "daily_pnl",
+  "as_of": "2026-07-18T21:30:00+00:00",
+  "daily_pnl_pct": 2.41,
+  "daily_pnl_abs": 3041.5,
+  "currency": "USD",
+  "equity": 128940.0,
+  "win_rate_pct": 68.0,
+  "trades_count": 14,
+  "label": "Aggressive book",
+  "series": [124832.0, 125410.5, 126100.25, 125890.0, 127200.75, 127950.5, 128430.0, 128940.0]
+}
