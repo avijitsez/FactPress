@@ -1,0 +1,5 @@
+# Determinism: all text files use LF everywhere — rendered SVG strings must not
+# vary with the platform that checked out the repo.
+* text=auto eol=lf
+*.ttf binary
+*.png binary
