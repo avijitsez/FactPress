@@ -1,0 +1,298 @@
+{#-
+  trade_executed — per-event "Entry/exit, plan vs outcome" template.
+  Consumes the render context defined in docs/rendering-contract.md:
+  W, H, size ("feed" | "telegram"), spec, brand {fonts, logo_text, watermark,
+  palette}, view {headline, subhead, emoji, hero, delta_chips, callouts,
+  sparkline, as_of, footer}.
+
+  Two variants, branched on spec.variant:
+  - buy_opened: symbol (headline) + BUY badge, hero = fill price, qty/plan
+    targets as chips.
+  - position_closed: symbol (headline) + CLOSED badge, hero = pnl, an
+    entry->exit visual built from the first two callouts, plan-vs-outcome
+    chips row when present, any remaining callouts below.
+
+  No formatting logic here -- every numeral in `view` already arrives fully
+  formatted by the renderer. This template only lays things out.
+-#}
+{%- set pal = brand.palette -%}
+{%- set sans = brand.fonts.sans -%}
+{%- set mono = brand.fonts.mono -%}
+{%- set variant = spec.variant -%}
+
+{%- macro arrow_glyph(d) -%}
+{%- if d == 'up' -%}▲{%- elif d == 'down' -%}▼{%- else -%}●{%- endif -%}
+{%- endmacro -%}
+
+{%- macro dir_color(d) -%}
+{%- if d == 'up' -%}{{ pal.positive }}{%- elif d == 'down' -%}{{ pal.negative }}{%- else -%}{{ pal.muted }}{%- endif -%}
+{%- endmacro -%}
+
+{%- macro hero_fill() -%}
+{%- if view.hero.color_role == 'positive' -%}{{ pal.positive }}{%- elif view.hero.color_role == 'negative' -%}{{ pal.negative }}{%- else -%}{{ pal.fg }}{%- endif -%}
+{%- endmacro -%}
+
+{#- badge text/color are derived from spec.variant, a fixed identifier (not
+    LLM copy), never from facts -- so no digit-ban or key-resolution concern. -#}
+{%- if variant == 'buy_opened' -%}
+  {%- set badge_text = 'BUY' -%}
+  {%- set badge_color = pal.positive -%}
+{%- else -%}
+  {%- set badge_text = 'CLOSED' -%}
+  {%- set badge_color = dir_color(view.hero.direction) -%}
+{%- endif %}
+
+{%- set margin = W * 0.065 -%}
+{%- set safe_w = W - margin * 2 -%}
+{%- set logo_size = [W * 0.020, 16] | max -%}
+{%- set meta_size = [W * 0.0145, 12] | max -%}
+{%- set footer_size = [W * 0.013, 11] | max -%}
+{%- set header_baseline = margin + logo_size -%}
+{%- set badge_h = [H * 0.032, 26] | max -%}
+{%- set badge_size = [W * 0.0155, 12] | max -%}
+
+<svg width="{{ W }}" height="{{ H }}" viewBox="0 0 {{ W }} {{ H }}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="{{ pal.grad_from }}"/>
+      <stop offset="100%" stop-color="{{ pal.grad_to }}"/>
+    </linearGradient>
+    <linearGradient id="accentGradV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="{{ pal.grad_from }}"/>
+      <stop offset="100%" stop-color="{{ pal.grad_to }}"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="{{ W }}" height="{{ H }}" fill="{{ pal.bg }}"/>
+
+  <!-- gradient accent wash: a large soft diagonal shape behind the header -->
+  <rect x="{{ W * 0.30 }}" y="{{ H * -0.22 }}" width="{{ W * 0.95 }}" height="{{ H * 0.5 }}"
+        rx="{{ margin }}" fill="url(#accentGrad)" opacity="0.14"
+        transform="rotate(-10 {{ W / 2 }} {{ H * 0.05 }})"/>
+
+  <!-- brand mark: small gradient accent bar beside the logo text -->
+  <rect x="{{ margin }}" y="{{ header_baseline - logo_size * 0.78 }}"
+        width="{{ logo_size * 0.34 }}" height="{{ logo_size * 0.78 }}"
+        rx="{{ logo_size * 0.12 }}" fill="url(#accentGradV)"/>
+  <text x="{{ margin + logo_size * 0.55 }}" y="{{ header_baseline }}"
+        font-family="{{ sans }}" font-weight="700" font-size="{{ logo_size }}"
+        fill="{{ pal.fg }}">{{ brand.logo_text }}</text>
+
+  {%- if view.as_of %}
+  <text x="{{ W - margin }}" y="{{ header_baseline }}" text-anchor="end"
+        font-family="{{ sans }}" font-weight="400" font-size="{{ meta_size }}"
+        fill="{{ pal.muted }}">{{ view.as_of }}</text>
+  {%- endif %}
+
+{%- if size == 'feed' %}
+{#- ============================== FEED (portrait, stacked) ============================== -#}
+  {%- set headline_size = [W * 0.075, 40] | max -%}
+  {%- set subhead_size = [W * 0.024, 16] | max -%}
+  {%- set hero_label_size = [W * 0.020, 14] | max -%}
+  {%- set hero_value_size = W * 0.150 -%}
+  {%- set chip_h = [H * 0.058, 54] | max -%}
+  {%- set chip_label_size = [W * 0.0145, 11] | max -%}
+  {%- set chip_value_size = [W * 0.021, 15] | max -%}
+  {%- set callout_value_size = [W * 0.024, 17] | max -%}
+  {%- set callout_label_size = [W * 0.0145, 11] | max -%}
+
+  {%- set ns = namespace(y = margin + logo_size + margin * 1.05) -%}
+  {%- set ns.y = ns.y + badge_h %}
+
+  {#- badge chip (BUY / CLOSED) above the symbol -#}
+  <rect x="{{ margin }}" y="{{ ns.y - badge_h }}" width="{{ badge_h * 2.5 }}" height="{{ badge_h }}"
+        rx="{{ badge_h / 2 }}" fill="{{ badge_color }}" opacity="0.18"/>
+  <text x="{{ margin + badge_h * 1.25 }}" y="{{ ns.y - badge_h * 0.32 }}" text-anchor="middle"
+        font-family="{{ sans }}" font-weight="700" font-size="{{ badge_size }}"
+        fill="{{ badge_color }}">{{ badge_text }}</text>
+
+  {%- set ns.y = ns.y + headline_size + margin * 0.55 %}
+  {#- symbol, huge -#}
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="800"
+        font-size="{{ headline_size }}" fill="{{ pal.fg }}">{{ view.headline }}</text>
+
+  {%- if view.subhead %}
+  {%- set ns.y = ns.y + subhead_size + margin * 0.35 %}
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ subhead_size }}" fill="{{ pal.muted }}">{{ view.subhead }}</text>
+  {%- endif %}
+
+  {#- hero block -#}
+  {%- set hero_y = H * 0.44 %}
+  <text x="{{ W / 2 }}" y="{{ hero_y - hero_value_size * 0.95 }}" text-anchor="middle"
+        font-family="{{ sans }}" font-weight="600" font-size="{{ hero_label_size }}"
+        fill="{{ pal.muted }}">{{ view.hero.label }}</text>
+  <text x="{{ W / 2 }}" y="{{ hero_y }}" text-anchor="middle"
+        font-family="{{ mono }}" font-weight="700" font-size="{{ hero_value_size }}"
+        fill="{{ hero_fill() }}"><tspan font-size="{{ hero_value_size * 0.5 }}">{{ arrow_glyph(view.hero.direction) }} </tspan>{{ view.hero.value }}</text>
+
+  {%- set ns.y = hero_y + hero_value_size * 0.42 + margin * 0.9 %}
+
+  {%- if variant == 'position_closed' and view.callouts | length >= 2 %}
+  {#- entry -> exit visual: first two callouts, joined by an arrow.
+      entry is left-aligned at the margin, exit is right-aligned at the
+      safe-area edge, arrow glyph sits centered between the two so neither
+      value's text can grow into it. -#}
+  {%- set entry = view.callouts[0] -%}
+  {%- set exit = view.callouts[1] -%}
+  {%- set right_edge = margin + safe_w -%}
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ callout_label_size }}" fill="{{ pal.muted }}">{{ entry.label }}</text>
+  <text x="{{ right_edge }}" y="{{ ns.y }}" text-anchor="end"
+        font-family="{{ sans }}" font-weight="400"
+        font-size="{{ callout_label_size }}" fill="{{ pal.muted }}">{{ exit.label }}</text>
+  {%- set ns.y = ns.y + callout_value_size + margin * 0.3 %}
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ mono }}" font-weight="700"
+        font-size="{{ callout_value_size }}" fill="{{ pal.fg }}">{{ entry.value }}</text>
+  <text x="{{ W / 2 }}" y="{{ ns.y }}" text-anchor="middle" font-family="{{ sans }}"
+        font-weight="700" font-size="{{ callout_value_size }}" fill="{{ pal.muted }}">→</text>
+  <text x="{{ right_edge }}" y="{{ ns.y }}" text-anchor="end"
+        font-family="{{ mono }}" font-weight="700"
+        font-size="{{ callout_value_size }}" fill="{{ hero_fill() }}">{{ exit.value }}</text>
+  {%- set ns.y = ns.y + callout_value_size + margin * 0.8 %}
+  {%- set remaining_callouts = view.callouts[2:] -%}
+  {%- else -%}
+  {%- set remaining_callouts = view.callouts -%}
+  {%- endif %}
+
+  {#- delta chips row: qty + plan targets (buy_opened) or plan-vs-outcome (position_closed) -#}
+  {%- set n_chips = view.delta_chips | length -%}
+  {%- if n_chips > 0 %}
+  {%- set chip_gap = margin * 0.4 -%}
+  {%- set chip_w = (safe_w - chip_gap * (n_chips - 1)) / n_chips -%}
+  {%- for chip in view.delta_chips %}
+  {%- set cx = margin + loop.index0 * (chip_w + chip_gap) %}
+  <rect x="{{ cx }}" y="{{ ns.y }}" width="{{ chip_w }}" height="{{ chip_h }}"
+        rx="{{ chip_h / 2 }}" fill="{{ pal.chip_bg }}"/>
+  <text x="{{ cx + chip_w * 0.5 }}" y="{{ ns.y + chip_h * 0.40 }}" text-anchor="middle"
+        font-family="{{ sans }}" font-weight="400" font-size="{{ chip_label_size }}"
+        fill="{{ pal.muted }}">{{ chip.label }}</text>
+  <text x="{{ cx + chip_w * 0.5 }}" y="{{ ns.y + chip_h * 0.76 }}" text-anchor="middle"
+        font-family="{{ mono }}" font-weight="700" font-size="{{ chip_value_size }}"
+        fill="{{ dir_color(chip.direction) }}">{{ arrow_glyph(chip.direction) }} {{ chip.value }}</text>
+  {%- endfor %}
+  {%- set ns.y = ns.y + chip_h + margin * 0.85 %}
+  {%- endif %}
+
+  {#- any remaining callouts -#}
+  {%- set n_callouts = remaining_callouts | length -%}
+  {%- if n_callouts > 0 %}
+  {%- set co_gap = margin * 0.4 -%}
+  {%- set co_w = (safe_w - co_gap * (n_callouts - 1)) / n_callouts -%}
+  {%- for co in remaining_callouts %}
+  {%- set cx = margin + loop.index0 * (co_w + co_gap) %}
+  <text x="{{ cx }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ chip_label_size }}" fill="{{ pal.muted }}">{{ co.label }}</text>
+  <text x="{{ cx }}" y="{{ ns.y + chip_value_size + 4 }}" font-family="{{ mono }}"
+        font-weight="700" font-size="{{ chip_value_size }}" fill="{{ pal.fg }}">{{ co.value }}</text>
+  {%- endfor %}
+  {%- endif %}
+
+{%- else %}
+{#- ============================== TELEGRAM (landscape, two-column) ============================== -#}
+  {%- set col_split = W * 0.55 -%}
+  {%- set left_x = margin -%}
+  {%- set left_w = col_split - margin -%}
+  {%- set right_x = col_split + margin * 0.5 -%}
+  {%- set right_w = W - right_x - margin -%}
+
+  {%- set headline_size = [W * 0.050, 30] | max -%}
+  {%- set subhead_size = [W * 0.019, 14] | max -%}
+  {%- set hero_label_size = [W * 0.018, 13] | max -%}
+  {%- set hero_value_size = H * 0.130 -%}
+  {%- set chip_h = [H * 0.11, 40] | max -%}
+  {%- set chip_label_size = [W * 0.0125, 10] | max -%}
+  {%- set chip_value_size = [W * 0.017, 13] | max -%}
+  {%- set callout_value_size = [W * 0.017, 13] | max -%}
+  {%- set callout_label_size = [W * 0.0115, 9] | max -%}
+
+  {%- set lns = namespace(y = margin + logo_size + margin * 1.1) -%}
+  {%- set lns.y = lns.y + badge_h %}
+
+  <rect x="{{ left_x }}" y="{{ lns.y - badge_h }}" width="{{ badge_h * 2.5 }}" height="{{ badge_h }}"
+        rx="{{ badge_h / 2 }}" fill="{{ badge_color }}" opacity="0.18"/>
+  <text x="{{ left_x + badge_h * 1.25 }}" y="{{ lns.y - badge_h * 0.32 }}" text-anchor="middle"
+        font-family="{{ sans }}" font-weight="700" font-size="{{ badge_size }}"
+        fill="{{ badge_color }}">{{ badge_text }}</text>
+
+  {%- set lns.y = lns.y + headline_size + margin * 0.4 %}
+  <text x="{{ left_x }}" y="{{ lns.y }}" font-family="{{ sans }}" font-weight="800"
+        font-size="{{ headline_size }}" fill="{{ pal.fg }}">{{ view.headline }}</text>
+
+  {%- if view.subhead %}
+  {%- set lns.y = lns.y + subhead_size + margin * 0.3 %}
+  <text x="{{ left_x }}" y="{{ lns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ subhead_size }}" fill="{{ pal.muted }}">{{ view.subhead }}</text>
+  {%- endif %}
+
+  {#- hero block anchored in the lower half of the left column -#}
+  {%- set hero_y = H * 0.72 %}
+  <text x="{{ left_x }}" y="{{ hero_y - hero_value_size * 0.90 }}"
+        font-family="{{ sans }}" font-weight="600" font-size="{{ hero_label_size }}"
+        fill="{{ pal.muted }}">{{ view.hero.label }}</text>
+  <text x="{{ left_x }}" y="{{ hero_y }}"
+        font-family="{{ mono }}" font-weight="700" font-size="{{ hero_value_size }}"
+        fill="{{ hero_fill() }}"><tspan font-size="{{ hero_value_size * 0.48 }}">{{ arrow_glyph(view.hero.direction) }} </tspan>{{ view.hero.value }}</text>
+
+  {%- set rns = namespace(y = margin + logo_size + margin * 1.1) -%}
+
+  {%- if variant == 'position_closed' and view.callouts | length >= 2 %}
+  {#- entry -> exit visual, stacked in the right column -#}
+  {%- set entry = view.callouts[0] -%}
+  {%- set exit = view.callouts[1] -%}
+  <text x="{{ right_x }}" y="{{ rns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ callout_label_size }}" fill="{{ pal.muted }}">{{ entry.label }}</text>
+  <text x="{{ right_x + right_w }}" y="{{ rns.y }}" text-anchor="end" font-family="{{ mono }}"
+        font-weight="700" font-size="{{ callout_value_size }}" fill="{{ pal.fg }}">{{ entry.value }}</text>
+  {%- set rns.y = rns.y + callout_value_size + margin * 0.32 %}
+  <text x="{{ right_x }}" y="{{ rns.y }}" font-family="{{ sans }}" font-weight="700"
+        font-size="{{ callout_value_size }}" fill="{{ pal.muted }}">→</text>
+  {%- set rns.y = rns.y + callout_value_size + margin * 0.32 %}
+  <text x="{{ right_x }}" y="{{ rns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ callout_label_size }}" fill="{{ pal.muted }}">{{ exit.label }}</text>
+  <text x="{{ right_x + right_w }}" y="{{ rns.y }}" text-anchor="end" font-family="{{ mono }}"
+        font-weight="700" font-size="{{ callout_value_size }}" fill="{{ hero_fill() }}">{{ exit.value }}</text>
+  {%- set rns.y = rns.y + callout_value_size + margin * 0.5 %}
+  {%- set remaining_callouts = view.callouts[2:] -%}
+  {%- else -%}
+  {%- set remaining_callouts = view.callouts -%}
+  {%- endif %}
+
+  {#- delta chips: stacked vertically down the right column -#}
+  {%- set n_chips = view.delta_chips | length -%}
+  {%- if n_chips > 0 %}
+  {%- set chip_gap = margin * 0.32 -%}
+  {%- for chip in view.delta_chips %}
+  <rect x="{{ right_x }}" y="{{ rns.y }}" width="{{ right_w }}" height="{{ chip_h }}"
+        rx="{{ chip_h / 2 }}" fill="{{ pal.chip_bg }}"/>
+  <text x="{{ right_x + right_w * 0.5 }}" y="{{ rns.y + chip_h * 0.40 }}" text-anchor="middle"
+        font-family="{{ sans }}" font-weight="400" font-size="{{ chip_label_size }}"
+        fill="{{ pal.muted }}">{{ chip.label }}</text>
+  <text x="{{ right_x + right_w * 0.5 }}" y="{{ rns.y + chip_h * 0.78 }}" text-anchor="middle"
+        font-family="{{ mono }}" font-weight="700" font-size="{{ chip_value_size }}"
+        fill="{{ dir_color(chip.direction) }}">{{ arrow_glyph(chip.direction) }} {{ chip.value }}</text>
+  {%- set rns.y = rns.y + chip_h + chip_gap %}
+  {%- endfor %}
+  {%- endif %}
+
+  {#- remaining callouts: stacked label/value rows in the right column -#}
+  {%- if remaining_callouts | length > 0 %}
+  {%- for co in remaining_callouts %}
+  <text x="{{ right_x }}" y="{{ rns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ callout_label_size }}" fill="{{ pal.muted }}">{{ co.label }}</text>
+  <text x="{{ right_x + right_w }}" y="{{ rns.y }}" text-anchor="end" font-family="{{ mono }}"
+        font-weight="700" font-size="{{ callout_value_size }}" fill="{{ pal.fg }}">{{ co.value }}</text>
+  {%- set rns.y = rns.y + callout_value_size + margin * 0.28 %}
+  {%- endfor %}
+  {%- endif %}
+{%- endif %}
+
+  <!-- footer + watermark -->
+  <text x="{{ margin }}" y="{{ H - margin * 0.55 }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ footer_size }}" fill="{{ pal.muted }}">{{ view.footer }}</text>
+  {%- if brand.watermark %}
+  <text x="{{ W - margin }}" y="{{ H - margin * 0.55 }}" text-anchor="end"
+        font-family="{{ sans }}" font-weight="700" font-size="{{ footer_size }}"
+        fill="{{ pal.muted }}" opacity="0.6">{{ brand.logo_text }}</text>
+  {%- endif %}
+</svg>

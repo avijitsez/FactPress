@@ -22,29 +22,36 @@ from pathlib import Path
 import pytest
 
 from factpress.renderer.engine_svg import load_brandkit, render_png
-from factpress.schemas import DailyPnlFacts, DesignSpec
+from factpress.schemas import DailyPnlFacts, DesignSpec, FactPayload, TradeExecutedFacts
 
 _GOLDEN_DIR = Path(__file__).resolve().parent
 _FIXTURES_DIR = _GOLDEN_DIR / "fixtures"
 _HASHES_PATH = _GOLDEN_DIR / "hashes.json"
 _REPO_ROOT = _GOLDEN_DIR.parent.parent
-_TEMPLATE_DIR = _REPO_ROOT / "templates" / "daily_pnl"
 _BRANDKIT_PATH = _REPO_ROOT / "brandkits" / "default.yaml"
 
 _FIXTURE_NAMES = sorted(p.stem for p in _FIXTURES_DIR.glob("*.json"))
 _SIZES = ["feed", "telegram"]
 
+_FACTS_MODELS: dict[str, type[FactPayload]] = {
+    "daily_pnl": DailyPnlFacts,
+    "trade_executed": TradeExecutedFacts,
+}
 
-def _load_fixture(name: str) -> tuple[DailyPnlFacts, DesignSpec]:
+
+def _load_fixture(name: str) -> tuple[FactPayload, DesignSpec]:
     data = json.loads((_FIXTURES_DIR / f"{name}.json").read_text(encoding="utf-8"))
-    facts = DailyPnlFacts.model_validate(data["facts"])
+    facts_data = data["facts"]
+    model = _FACTS_MODELS[facts_data["event_type"]]
+    facts = model.model_validate(facts_data)
     spec = DesignSpec.model_validate(data["spec"])
     return facts, spec
 
 
 def _render(name: str, size: str, brandkit: dict) -> bytes:
     facts, spec = _load_fixture(name)
-    return render_png(facts, spec, template_dir=_TEMPLATE_DIR, brandkit=brandkit, size=size)
+    template_dir = _REPO_ROOT / "templates" / spec.template_id
+    return render_png(facts, spec, template_dir=template_dir, brandkit=brandkit, size=size)
 
 
 def _sha256(data: bytes) -> str:

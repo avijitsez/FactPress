@@ -19,10 +19,11 @@ from typing import Any
 from factpress.catalog import builtin_templates_dir, catalog_entry, discover_templates
 from factpress.director import Director, fallback_spec
 from factpress.renderer.engine_svg import load_brandkit, render_png
-from factpress.schemas import DailyPnlFacts, FactPayload
+from factpress.schemas import DailyPnlFacts, FactPayload, TradeExecutedFacts
 
 _EVENT_MODELS: dict[str, type[FactPayload]] = {
     "daily_pnl": DailyPnlFacts,
+    "trade_executed": TradeExecutedFacts,
 }
 
 

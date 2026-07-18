@@ -1,0 +1,29 @@
+{
+  "facts": {
+    "event_type": "trade_executed",
+    "symbol": "TSLA",
+    "side": "sell",
+    "qty": 40,
+    "fill_price": 208.10,
+    "entry_price": 231.75,
+    "pnl_abs": -943.60,
+    "pnl_pct": -10.2,
+    "plan_target_pct": 6.0,
+    "plan_stop_pct": -8.0,
+    "currency": "USD",
+    "as_of": "2026-07-18T19:47:00+00:00"
+  },
+  "spec": {
+    "template_id": "trade_executed",
+    "template_version": "1.0.0",
+    "variant": "position_closed",
+    "tone": "cautionary",
+    "palette_id": "ember",
+    "hero_metric_key": "pnl_pct",
+    "emphasis_keys": ["plan_target_pct"],
+    "callout_keys": ["entry_price", "fill_price"],
+    "headline": "TSLA",
+    "subhead": "Stop triggered before target",
+    "sparkline": false
+  }
+}

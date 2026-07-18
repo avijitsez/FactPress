@@ -104,6 +104,23 @@ class DailyPnlFacts(FactPayload):
     label: str | None = Field(default=None, max_length=40)
 
 
+class TradeExecutedFacts(FactPayload):
+    """Facts for a single trade execution (open or close) notification."""
+
+    event_type: Literal["trade_executed"] = "trade_executed"
+    symbol: str = Field(min_length=1, max_length=20)
+    side: Literal["buy", "sell"]
+    qty: float = Field(gt=0)
+    fill_price: float
+    entry_price: float | None = None
+    pnl_abs: float | None = None
+    pnl_pct: float | None = None
+    plan_target_pct: float | None = None
+    plan_stop_pct: float | None = None
+    currency: str = "USD"
+    label: str | None = Field(default=None, max_length=40)
+
+
 class DesignSpec(BaseModel):
     """The creative director's output. Zero free numeric fields.
 

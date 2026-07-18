@@ -1,0 +1,26 @@
+{
+  "facts": {
+    "event_type": "trade_executed",
+    "symbol": "AAPL",
+    "side": "buy",
+    "qty": 150,
+    "fill_price": 189.42,
+    "plan_target_pct": 8.5,
+    "plan_stop_pct": -3.0,
+    "currency": "USD",
+    "as_of": "2026-07-18T14:32:00+00:00"
+  },
+  "spec": {
+    "template_id": "trade_executed",
+    "template_version": "1.0.0",
+    "variant": "buy_opened",
+    "tone": "celebratory",
+    "palette_id": "midnight",
+    "hero_metric_key": "fill_price",
+    "emphasis_keys": ["qty", "plan_target_pct", "plan_stop_pct"],
+    "callout_keys": [],
+    "headline": "AAPL",
+    "subhead": "Position opened, plan locked in",
+    "sparkline": false
+  }
+}
