@@ -22,11 +22,26 @@ from factpress.catalog import builtin_templates_dir, catalog_entry, discover_tem
 from factpress.director import Director, fallback_spec
 from factpress.publisher import MessageRef, Publisher
 from factpress.renderer.engine_svg import load_brandkit, render_png
-from factpress.schemas import DailyPnlFacts, DesignSpec, FactPayload, TradeExecutedFacts
+from factpress.schemas import (
+    DailyPnlFacts,
+    DesignSpec,
+    DigestTopPicksFacts,
+    FactPayload,
+    MilestoneFacts,
+    PulseUpdateFacts,
+    ReflectionRecapFacts,
+    SessionDigestFacts,
+    TradeExecutedFacts,
+)
 
 _EVENT_MODELS: dict[str, type[FactPayload]] = {
     "daily_pnl": DailyPnlFacts,
     "trade_executed": TradeExecutedFacts,
+    "pulse_update": PulseUpdateFacts,
+    "session_digest": SessionDigestFacts,
+    "digest_top_picks": DigestTopPicksFacts,
+    "milestone": MilestoneFacts,
+    "reflection_recap": ReflectionRecapFacts,
 }
 
 

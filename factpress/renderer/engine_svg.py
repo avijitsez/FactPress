@@ -33,6 +33,24 @@ _SPARKLINE_W = 420
 _SPARKLINE_H = 96
 
 _DIRECTION_TO_COLOR_ROLE = {"up": "positive", "down": "negative", "flat": "neutral"}
+_REFLECTION_CAP = 220
+
+
+def _truncate_reflection(text: str, cap: int = _REFLECTION_CAP) -> str:
+    """Deterministically truncate ``text`` to ``cap`` chars on a word boundary.
+
+    Renderer's slot cap for the ``reflection`` view field: text at or under
+    the cap passes through untouched; longer text is cut back to the last
+    whitespace at-or-before the cap and gets a trailing "…" so the trim is
+    visible. Never truncates mid-word.
+    """
+    if len(text) <= cap:
+        return text
+    truncated = text[:cap]
+    last_space = truncated.rfind(" ")
+    if last_space > 0:
+        truncated = truncated[:last_space]
+    return truncated.rstrip() + "…"
 
 
 def load_manifest(template_dir: Path) -> dict[str, Any]:
@@ -149,6 +167,11 @@ def build_view(facts: FactPayload, spec: DesignSpec, brandkit: dict[str, Any]) -
         else:
             as_of = fmt.format_timestamp(facts.as_of)
 
+    reflection = None
+    candidates = getattr(facts, "reflection_candidates", None)
+    if spec.reflection_index is not None and isinstance(candidates, list):
+        reflection = _truncate_reflection(candidates[spec.reflection_index])
+
     return {
         "headline": spec.headline,
         "subhead": spec.subhead,
@@ -159,6 +182,7 @@ def build_view(facts: FactPayload, spec: DesignSpec, brandkit: dict[str, Any]) -
         "sparkline": sparkline,
         "as_of": as_of,
         "footer": brandkit["footer"],
+        "reflection": reflection,
     }
 
 

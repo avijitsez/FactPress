@@ -121,6 +121,109 @@ class TradeExecutedFacts(FactPayload):
     label: str | None = Field(default=None, max_length=40)
 
 
+class PulseUpdateFacts(FactPayload):
+    """Facts for a recurring (hourly) compact status pulse."""
+
+    event_type: Literal["pulse_update"] = "pulse_update"
+    mode_pnl_pct: float
+    open_positions_count: int = Field(ge=0)
+    orders_used_count: int | None = None
+    orders_cap_count: int | None = None
+    series: list[float] | None = Field(default=None, max_length=500)
+    label: str | None = Field(default=None, max_length=40)
+
+
+class SessionDigestFacts(FactPayload):
+    """Facts for a session-open or session-close digest."""
+
+    event_type: Literal["session_digest"] = "session_digest"
+    session: Literal["open", "close"]
+    realized_pnl_pct: float | None = None
+    realized_pnl_abs: float | None = None
+    currency: str = "USD"
+    watchlist_symbols: list[str] | None = Field(default=None, max_length=12)
+    regime: str | None = Field(default=None, max_length=30)
+    plan_notes: list[str] | None = Field(default=None, max_length=5)
+    hit_count: int | None = None
+    miss_count: int | None = None
+    label: str | None = Field(default=None, max_length=40)
+
+    @field_validator("watchlist_symbols")
+    @classmethod
+    def _symbol_length(cls, v: list[str] | None) -> list[str] | None:
+        if v is not None:
+            for symbol in v:
+                if len(symbol) > 20:
+                    raise ValueError("watchlist_symbols entries must be at most 20 chars")
+        return v
+
+    @field_validator("plan_notes")
+    @classmethod
+    def _plan_note_length(cls, v: list[str] | None) -> list[str] | None:
+        if v is not None:
+            for note in v:
+                if len(note) > 120:
+                    raise ValueError("plan_notes entries must be at most 120 chars")
+        return v
+
+
+class PickItem(BaseModel):
+    """A single ranked candidate within a ``digest_top_picks`` notification."""
+
+    symbol: str = Field(min_length=1, max_length=20)
+    score: float
+    direction: Literal["long", "short"] | None = None
+    note: str | None = Field(default=None, max_length=80)
+
+
+class DigestTopPicksFacts(FactPayload):
+    """Facts for a ranked daily candidate-list digest."""
+
+    event_type: Literal["digest_top_picks"] = "digest_top_picks"
+    picks: list[PickItem] = Field(min_length=1, max_length=10)
+    label: str | None = Field(default=None, max_length=40)
+
+
+class MilestoneFacts(FactPayload):
+    """Facts for a one-off streak/record milestone notification."""
+
+    event_type: Literal["milestone"] = "milestone"
+    milestone_kind: str = Field(max_length=40)
+    streak_count: int | None = None
+    record_value: float | None = None
+    record_unit: str | None = Field(default=None, max_length=20)
+    previous_best: float | None = None
+    label: str | None = Field(default=None, max_length=40)
+
+
+class ReflectionRecapFacts(FactPayload):
+    """Facts for a weekly reflection recap.
+
+    ``reflection_candidates`` is host-authored prose -- the director may
+    only select one by index (``DesignSpec.reflection_index``), never write
+    or edit the text. See "Insights-by-reference" in FACTPRESS_DESIGN.md §8.
+    """
+
+    event_type: Literal["reflection_recap"] = "reflection_recap"
+    week_pnl_pct: float
+    trades_count: int | None = None
+    win_rate_pct: float | None = None
+    best_day_pct: float | None = None
+    worst_day_pct: float | None = None
+    reflection_candidates: list[str] = Field(min_length=1, max_length=5)
+    label: str | None = Field(default=None, max_length=40)
+
+    @field_validator("reflection_candidates")
+    @classmethod
+    def _candidate_length(cls, v: list[str]) -> list[str]:
+        for candidate in v:
+            if not (20 <= len(candidate) <= 500):
+                raise ValueError(
+                    "reflection_candidates entries must be between 20 and 500 chars"
+                )
+        return v
+
+
 class DesignSpec(BaseModel):
     """The creative director's output. Zero free numeric fields.
 
@@ -128,6 +231,13 @@ class DesignSpec(BaseModel):
     (``hero_metric_key``, ``emphasis_keys``, ``callout_keys``); the renderer
     resolves those keys and formats the numerals. Extra fields are forbidden
     so the LLM cannot smuggle in anything outside this contract.
+
+    ``reflection_index`` is the one exception to "no numeric fields" -- and
+    it is not one, in spirit: it is an *index* into
+    ``facts.reflection_candidates`` (insights-by-reference), exactly like
+    ``hero_metric_key`` is a reference into facts by key rather than a value.
+    The director selects which host-authored candidate to use; it never
+    writes the candidate's content, and this field never carries prose.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -145,6 +255,7 @@ class DesignSpec(BaseModel):
     caption: str | None = Field(default=None, max_length=200)
     emoji: str | None = Field(default=None, max_length=4)
     sparkline: bool = True
+    reflection_index: int | None = None
 
     @field_validator("headline", "subhead", "caption", "emoji")
     @classmethod
@@ -222,6 +333,21 @@ def validate_spec_for_facts(spec: DesignSpec, facts: FactPayload) -> None:
                 "the renderer would silently drop it and the director must "
                 "not promise one"
             )
+
+    candidates = getattr(facts, "reflection_candidates", None)
+    if spec.reflection_index is not None:
+        if not isinstance(candidates, list) or not (
+            0 <= spec.reflection_index < len(candidates)
+        ):
+            violations.append(
+                f"reflection_index {spec.reflection_index!r} is out of range for "
+                "facts.reflection_candidates"
+            )
+    elif isinstance(candidates, list):
+        violations.append(
+            "reflection_recap requires the director to select a reflection "
+            "candidate by index"
+        )
 
     if violations:
         raise SpecFactsMismatch(violations)
