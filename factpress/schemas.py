@@ -125,3 +125,78 @@ class DesignSpec(BaseModel):
     @classmethod
     def _no_digits(cls, v: str | None) -> str | None:
         return _reject_digits(v)
+
+
+class SpecFactsMismatch(ValueError):
+    """Raised when a DesignSpec's key references don't reconcile with a
+    FactPayload.
+
+    Carries every violation found (not just the first) so the director's
+    retry/fallback path can see the whole picture in one shot. A spec that
+    fails this check is rejected exactly like a schema error.
+    """
+
+    def __init__(self, violations: list[str]) -> None:
+        self.violations = violations
+        super().__init__("; ".join(violations))
+
+
+def validate_spec_for_facts(spec: DesignSpec, facts: FactPayload) -> None:
+    """Cross-validate a DesignSpec's key references against a FactPayload.
+
+    Collects *all* violations before raising (fail-slow, not fail-fast), so
+    a rejected spec carries the complete list back to the caller. Raises
+    ``SpecFactsMismatch`` if any violation is found; returns ``None``
+    otherwise.
+    """
+    violations: list[str] = []
+    metric_keys = facts.metric_keys()
+
+    hero_valid = spec.hero_metric_key in metric_keys
+    if not hero_valid:
+        violations.append(
+            f"hero_metric_key {spec.hero_metric_key!r} is not a fact metric key"
+        )
+
+    for key in spec.emphasis_keys:
+        if key not in metric_keys:
+            violations.append(f"emphasis_keys entry {key!r} is not a fact metric key")
+
+    for key in spec.callout_keys:
+        if key not in metric_keys:
+            violations.append(f"callout_keys entry {key!r} is not a fact metric key")
+
+    if len(set(spec.emphasis_keys)) != len(spec.emphasis_keys):
+        violations.append("emphasis_keys contains duplicate entries")
+
+    if len(set(spec.callout_keys)) != len(spec.callout_keys):
+        violations.append("callout_keys contains duplicate entries")
+
+    if spec.hero_metric_key in spec.emphasis_keys:
+        violations.append(
+            f"hero_metric_key {spec.hero_metric_key!r} is repeated in emphasis_keys"
+        )
+
+    if hero_valid and spec.tone == Tone.CELEBRATORY:
+        hero_value = getattr(facts, spec.hero_metric_key)
+        if (
+            isinstance(hero_value, (int, float))
+            and not isinstance(hero_value, bool)
+            and hero_value < 0
+        ):
+            violations.append(
+                "tone is celebratory but hero metric is negative: "
+                "a red day cannot use celebratory tone"
+            )
+
+    if spec.sparkline:
+        series = getattr(facts, "series", None)
+        if not isinstance(series, (list, tuple)) or len(series) < 2:
+            violations.append(
+                "sparkline requires a series of at least 2 points in facts; "
+                "the renderer would silently drop it and the director must "
+                "not promise one"
+            )
+
+    if violations:
+        raise SpecFactsMismatch(violations)

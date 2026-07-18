@@ -1,7 +1,13 @@
 import pytest
 from pydantic import ValidationError
 
-from factpress.schemas import DailyPnlFacts, DesignSpec, Tone
+from factpress.schemas import (
+    DailyPnlFacts,
+    DesignSpec,
+    SpecFactsMismatch,
+    Tone,
+    validate_spec_for_facts,
+)
 
 
 def _valid_spec_kwargs(**overrides):
@@ -95,3 +101,141 @@ def test_daily_pnl_series_max_length():
     DailyPnlFacts(daily_pnl_pct=1.0, series=[0.0] * 500)
     with pytest.raises(ValidationError):
         DailyPnlFacts(daily_pnl_pct=1.0, series=[0.0] * 501)
+
+
+def _valid_facts(**overrides):
+    kwargs = dict(
+        daily_pnl_pct=1.5,
+        equity=10000.0,
+        win_rate_pct=60.0,
+        series=[1.0, 2.0, 3.0],
+    )
+    kwargs.update(overrides)
+    return DailyPnlFacts(**kwargs)
+
+
+def test_validate_spec_for_facts_happy_path():
+    spec = DesignSpec(**_valid_spec_kwargs())
+    facts = _valid_facts()
+    validate_spec_for_facts(spec, facts)
+
+
+def test_validate_spec_for_facts_hero_key_missing():
+    spec = DesignSpec(**_valid_spec_kwargs(hero_metric_key="nonexistent_key"))
+    facts = _valid_facts()
+    with pytest.raises(SpecFactsMismatch) as exc_info:
+        validate_spec_for_facts(spec, facts)
+    assert any("nonexistent_key" in v for v in exc_info.value.violations)
+    assert "nonexistent_key" in str(exc_info.value)
+
+
+def test_validate_spec_for_facts_emphasis_key_missing():
+    spec = DesignSpec(**_valid_spec_kwargs(emphasis_keys=["nonexistent_key"]))
+    facts = _valid_facts()
+    with pytest.raises(SpecFactsMismatch) as exc_info:
+        validate_spec_for_facts(spec, facts)
+    assert any(
+        "nonexistent_key" in v and "emphasis_keys" in v
+        for v in exc_info.value.violations
+    )
+
+
+def test_validate_spec_for_facts_callout_key_missing():
+    spec = DesignSpec(**_valid_spec_kwargs(callout_keys=["nonexistent_key"]))
+    facts = _valid_facts()
+    with pytest.raises(SpecFactsMismatch) as exc_info:
+        validate_spec_for_facts(spec, facts)
+    assert any(
+        "nonexistent_key" in v and "callout_keys" in v
+        for v in exc_info.value.violations
+    )
+
+
+def test_validate_spec_for_facts_duplicate_emphasis_keys():
+    spec = DesignSpec(**_valid_spec_kwargs(emphasis_keys=["equity", "equity"]))
+    facts = _valid_facts()
+    with pytest.raises(SpecFactsMismatch) as exc_info:
+        validate_spec_for_facts(spec, facts)
+    assert any(
+        "emphasis_keys" in v and "duplicate" in v for v in exc_info.value.violations
+    )
+
+
+def test_validate_spec_for_facts_duplicate_callout_keys():
+    spec = DesignSpec(
+        **_valid_spec_kwargs(callout_keys=["win_rate_pct", "win_rate_pct"])
+    )
+    facts = _valid_facts()
+    with pytest.raises(SpecFactsMismatch) as exc_info:
+        validate_spec_for_facts(spec, facts)
+    assert any(
+        "callout_keys" in v and "duplicate" in v for v in exc_info.value.violations
+    )
+
+
+def test_validate_spec_for_facts_hero_key_repeated_in_emphasis():
+    spec = DesignSpec(**_valid_spec_kwargs(emphasis_keys=["daily_pnl_pct"]))
+    facts = _valid_facts()
+    with pytest.raises(SpecFactsMismatch) as exc_info:
+        validate_spec_for_facts(spec, facts)
+    assert any(
+        "daily_pnl_pct" in v and "emphasis_keys" in v
+        for v in exc_info.value.violations
+    )
+
+
+def test_validate_spec_for_facts_celebratory_on_red_day():
+    spec = DesignSpec(**_valid_spec_kwargs(tone=Tone.CELEBRATORY))
+    facts = _valid_facts(daily_pnl_pct=-2.5)
+    with pytest.raises(SpecFactsMismatch) as exc_info:
+        validate_spec_for_facts(spec, facts)
+    assert any(
+        "celebratory" in v and "red day" in v for v in exc_info.value.violations
+    )
+
+
+def test_validate_spec_for_facts_sparkline_requires_series():
+    spec = DesignSpec(**_valid_spec_kwargs(sparkline=True))
+    facts = DailyPnlFacts(daily_pnl_pct=1.0, equity=100.0, win_rate_pct=50.0)
+    with pytest.raises(SpecFactsMismatch) as exc_info:
+        validate_spec_for_facts(spec, facts)
+    assert any("sparkline requires a series" in v for v in exc_info.value.violations)
+
+
+def test_validate_spec_for_facts_sparkline_requires_at_least_two_points():
+    spec = DesignSpec(**_valid_spec_kwargs(sparkline=True))
+    facts = _valid_facts(series=[1.0])
+    with pytest.raises(SpecFactsMismatch) as exc_info:
+        validate_spec_for_facts(spec, facts)
+    assert any("sparkline requires a series" in v for v in exc_info.value.violations)
+
+
+def test_validate_spec_for_facts_multiple_violations_collected():
+    spec = DesignSpec(
+        **_valid_spec_kwargs(hero_metric_key="nonexistent_key", sparkline=True)
+    )
+    facts = DailyPnlFacts(daily_pnl_pct=1.0)
+    with pytest.raises(SpecFactsMismatch) as exc_info:
+        validate_spec_for_facts(spec, facts)
+    assert len(exc_info.value.violations) >= 2
+    assert any("nonexistent_key" in v for v in exc_info.value.violations)
+    assert any("sparkline requires a series" in v for v in exc_info.value.violations)
+
+
+def test_validate_spec_for_facts_celebratory_with_positive_hero_passes():
+    spec = DesignSpec(**_valid_spec_kwargs(tone=Tone.CELEBRATORY))
+    facts = _valid_facts(daily_pnl_pct=5.0)
+    validate_spec_for_facts(spec, facts)
+
+
+@pytest.mark.parametrize("tone", [Tone.NEUTRAL, Tone.CAUTIONARY])
+def test_validate_spec_for_facts_non_celebratory_with_negative_hero_passes(tone):
+    spec = DesignSpec(**_valid_spec_kwargs(tone=tone))
+    facts = _valid_facts(daily_pnl_pct=-3.0)
+    validate_spec_for_facts(spec, facts)
+
+
+def test_validate_spec_for_facts_sparkline_false_with_no_series_passes():
+    spec = DesignSpec(**_valid_spec_kwargs(sparkline=False))
+    facts = DailyPnlFacts(daily_pnl_pct=1.0, equity=100.0, win_rate_pct=50.0)
+    validate_spec_for_facts(spec, facts)
