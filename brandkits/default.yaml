@@ -1,0 +1,51 @@
+# FactPress default brand kit.
+# Schema: see .foreman/contracts/view-context.md (`brand` section of the
+# render context). Palettes are selected per-render via `spec.palette_id`.
+name: default
+
+fonts:
+  sans: Inter
+  mono: JetBrains Mono
+
+logo_text: FactPress
+watermark: true
+footer: "Automated summary — not investment advice"
+
+palettes:
+  midnight:
+    bg: "#0d1117"
+    surface: "#161b22"
+    fg: "#f0f6fc"
+    muted: "#8b949e"
+    accent: "#58a6ff"
+    positive: "#3fb950"
+    negative: "#f85149"
+    grad_from: "#1f6feb"
+    grad_to: "#8957e5"
+    chip_bg: "#21262d"
+
+  # Warm dark theme — amber/coral accents on a near-black brown base.
+  ember:
+    bg: "#1a1210"
+    surface: "#241914"
+    fg: "#fbeee4"
+    muted: "#a68a7a"
+    accent: "#ff8a3d"
+    positive: "#3ddc84"
+    negative: "#ff5c5c"
+    grad_from: "#f7931e"
+    grad_to: "#ff3d68"
+    chip_bg: "#2a1e18"
+
+  # Cool dark theme — teal/violet accents on a deep navy base.
+  aurora:
+    bg: "#0b1220"
+    surface: "#131c2e"
+    fg: "#eaf2ff"
+    muted: "#7d8bab"
+    accent: "#34d1c5"
+    positive: "#2dd4a7"
+    negative: "#f76e8b"
+    grad_from: "#22d3ee"
+    grad_to: "#a855f7"
+    chip_bg: "#182338"
