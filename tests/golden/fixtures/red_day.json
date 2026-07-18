@@ -1,0 +1,25 @@
+{
+  "facts": {
+    "event_type": "daily_pnl",
+    "daily_pnl_pct": -1.85,
+    "daily_pnl_abs": -925.40,
+    "currency": "USD",
+    "equity": 48210.55,
+    "series": [100.0, 99.2, 98.5, 97.8, 96.4, 95.9, 94.7, 93.2],
+    "win_rate_pct": 41.0,
+    "trades_count": 33,
+    "as_of": "2026-07-18T15:04:00+00:00"
+  },
+  "spec": {
+    "template_id": "daily_pnl",
+    "template_version": "1.0.0",
+    "tone": "cautionary",
+    "palette_id": "ember",
+    "hero_metric_key": "daily_pnl_pct",
+    "emphasis_keys": ["win_rate_pct"],
+    "callout_keys": ["trades_count"],
+    "headline": "Red day, discipline held",
+    "subhead": "Risk stayed within the guardrails",
+    "sparkline": true
+  }
+}

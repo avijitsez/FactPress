@@ -1,0 +1,10 @@
+{
+  "win32": {
+    "green_day@feed": "0b87cf050cd21911045ffa972745920d388ff9d14dbf8420c4c4414d8a14b963",
+    "green_day@telegram": "231bd7c9ca6e3f83a352df041b774797558ae1b95fbe24a2522821a772cfdf93",
+    "no_spark@feed": "adceb0c015a54aa321f8c00688bca0dfbbf781956361b02bf42ba88671770be9",
+    "no_spark@telegram": "c36d82b43b52a402c5684430496f2c89762cab46b60b77af57d1fe9502cd30ff",
+    "red_day@feed": "f046f3df40abca48d23746dbaa7139e3aada307c39670124cf87e9b3fcddc094",
+    "red_day@telegram": "3d42b6355e9eb9932fc91ac64859fdd8bd95ff30041b658987d918b1b04138f7"
+  }
+}

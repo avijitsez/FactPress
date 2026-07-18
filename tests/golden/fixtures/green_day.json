@@ -1,0 +1,25 @@
+{
+  "facts": {
+    "event_type": "daily_pnl",
+    "daily_pnl_pct": 2.75,
+    "daily_pnl_abs": 1450.32,
+    "currency": "USD",
+    "equity": 52340.10,
+    "series": [100.0, 101.2, 102.5, 101.8, 103.4, 104.9, 103.7, 106.2],
+    "win_rate_pct": 68.0,
+    "trades_count": 57,
+    "as_of": "2026-07-18T15:04:00+00:00"
+  },
+  "spec": {
+    "template_id": "daily_pnl",
+    "template_version": "1.0.0",
+    "tone": "celebratory",
+    "palette_id": "midnight",
+    "hero_metric_key": "daily_pnl_pct",
+    "emphasis_keys": ["win_rate_pct", "trades_count"],
+    "callout_keys": ["equity"],
+    "headline": "Green day across the board",
+    "subhead": "Momentum building through the close",
+    "sparkline": true
+  }
+}

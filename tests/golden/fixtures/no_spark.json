@@ -1,0 +1,22 @@
+{
+  "facts": {
+    "event_type": "daily_pnl",
+    "daily_pnl_pct": 0.95,
+    "daily_pnl_abs": 210.00,
+    "currency": "USD",
+    "equity": 30500.00,
+    "win_rate_pct": 55.0,
+    "trades_count": 12
+  },
+  "spec": {
+    "template_id": "daily_pnl",
+    "template_version": "1.0.0",
+    "tone": "neutral",
+    "palette_id": "aurora",
+    "hero_metric_key": "daily_pnl_pct",
+    "emphasis_keys": ["win_rate_pct"],
+    "callout_keys": ["trades_count"],
+    "headline": "Quiet grind, steady close",
+    "sparkline": false
+  }
+}
