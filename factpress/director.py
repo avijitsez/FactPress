@@ -92,7 +92,10 @@ class DirectorConfig:
     api_key: str | None = None
     timeout_s: float = 20.0
     temperature: float = 0.4
-    max_tokens: int = 800
+    # Reasoning models (e.g. Nemotron) spend thousands of tokens thinking
+    # before emitting the spec JSON; a small cap truncates mid-reasoning and
+    # yields an unparseable reply. 4096 leaves comfortable headroom.
+    max_tokens: int = 4096
 
 
 class _AttemptFailure(Exception):
