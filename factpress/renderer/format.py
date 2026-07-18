@@ -1,7 +1,7 @@
 """Numeral and label formatting for the renderer.
 
 Per the FactPress design philosophy (see FACTPRESS_DESIGN.md and
-``.foreman/contracts/view-context.md``): the LLM never writes a number into
+``docs/rendering-contract.md``): the LLM never writes a number into
 rendered copy — it only references facts by key. This module is the single
 place where every numeral, currency symbol, sign, and timestamp gets its
 final on-image string form. All functions here are pure and deterministic:
@@ -142,7 +142,7 @@ def humanize_key(key: str) -> str:
 def format_metric(key: str, value: float | int, *, currency: str = "USD") -> tuple[str, str]:
     """Resolve a fact key/value pair to a (label, formatted_value) pair.
 
-    Heuristics (see ``.foreman/contracts/view-context.md``):
+    Heuristics (see ``docs/rendering-contract.md``):
     - ``*_pct`` -> signed percent, 2dp.
     - ``*_abs`` -> signed currency.
     - ``equity`` or any key mentioning "price" -> unsigned currency.

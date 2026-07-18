@@ -87,3 +87,22 @@ def test_installed_console_script_renders_png(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert out.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_facts_with_no_numeric_metrics_exits_2(tmp_path, capsys):
+    facts_file = tmp_path / "no_metrics.json"
+    facts_file.write_text('{"event_type": "custom_event", "note": "hello"}', encoding="utf-8")
+    template_dir = Path(__file__).resolve().parent.parent / "templates" / "daily_pnl"
+    rc = main(
+        [
+            "render",
+            str(facts_file),
+            "--template-dir",
+            str(template_dir),
+            "--out",
+            str(tmp_path / "x.png"),
+        ]
+    )
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "no numeric metric" in err

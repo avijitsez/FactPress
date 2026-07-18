@@ -52,6 +52,10 @@ def default_spec(
     be needed.
     """
     metric_keys = facts.metric_keys()
+    if not metric_keys:
+        raise ValueError(
+            "facts contain no numeric metric fields; cannot choose a hero metric"
+        )
 
     if "daily_pnl_pct" in metric_keys:
         hero_metric_key = "daily_pnl_pct"
@@ -151,7 +155,11 @@ def _cmd_render(args: argparse.Namespace) -> int:
         print(f"error: cannot load brandkit from {brandkit_path}: {exc}", file=sys.stderr)
         return 2
 
-    spec = default_spec(facts, manifest, brandkit)
+    try:
+        spec = default_spec(facts, manifest, brandkit)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
     try:
         png = render_png(facts, spec, template_dir=template_dir, brandkit=brandkit, size=args.size)

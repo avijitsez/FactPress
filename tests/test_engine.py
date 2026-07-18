@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -234,3 +234,17 @@ def test_dict_facts_entry_point_works_for_render_svg(brandkit):
     svg = render_svg(facts_dict, spec, template_dir=TEMPLATE_DIR, brandkit=brandkit)
     assert svg.startswith("<svg")
     assert "Green day across the board" in svg
+
+
+def test_as_of_aware_non_utc_is_converted_to_utc(brandkit):
+    ist = timezone(timedelta(hours=5, minutes=30))
+    facts = make_facts(as_of=datetime(2026, 7, 18, 21, 30, tzinfo=ist))
+    view = build_view(facts, make_spec(), brandkit)
+    assert view["as_of"] == "18 Jul 2026, 16:00 UTC"
+
+
+def test_as_of_naive_gets_no_utc_label(brandkit):
+    facts = make_facts(as_of=datetime(2026, 7, 18, 21, 30))
+    view = build_view(facts, make_spec(), brandkit)
+    assert view["as_of"] == "18 Jul 2026, 21:30"
+    assert "UTC" not in view["as_of"]

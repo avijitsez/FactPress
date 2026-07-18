@@ -1,6 +1,6 @@
 """SVG/PNG rendering engine (F0.5).
 
-Builds the render context defined in ``.foreman/contracts/view-context.md``
+Builds the render context defined in ``docs/rendering-contract.md``
 from a facts payload + design spec + brandkit, renders it through the
 template's ``template.svg.j2`` (Jinja2, ``StrictUndefined`` + autoescape),
 and rasterizes to PNG via ``resvg_py`` with fully hermetic font settings
@@ -14,6 +14,7 @@ formatted by ``factpress.renderer.format`` before it lands in ``view``.
 from __future__ import annotations
 
 import re
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -110,7 +111,7 @@ def _coerce_facts(facts: FactPayload | dict[str, Any]) -> FactPayload:
 
 
 def build_view(facts: FactPayload, spec: DesignSpec, brandkit: dict[str, Any]) -> dict[str, Any]:
-    """Build the ``view`` sub-context per ``.foreman/contracts/view-context.md``."""
+    """Build the ``view`` sub-context per ``docs/rendering-contract.md``."""
     currency = getattr(facts, "currency", None) or "USD"
 
     hero_label, hero_value, hero_raw = _resolve_metric(facts, spec.hero_metric_key, currency)
@@ -140,8 +141,13 @@ def build_view(facts: FactPayload, spec: DesignSpec, brandkit: dict[str, Any]) -
 
     as_of = None
     if facts.as_of is not None:
-        tz_label = "UTC" if facts.as_of.tzinfo else None
-        as_of = fmt.format_timestamp(facts.as_of, tz_label=tz_label)
+        # Aware datetimes are converted to UTC before formatting — printing a
+        # local wall-clock time under a "UTC" label would put a false fact on
+        # the image. Naive datetimes are rendered as-is with no zone label.
+        if facts.as_of.tzinfo is not None:
+            as_of = fmt.format_timestamp(facts.as_of.astimezone(UTC), tz_label="UTC")
+        else:
+            as_of = fmt.format_timestamp(facts.as_of)
 
     return {
         "headline": spec.headline,
