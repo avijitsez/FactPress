@@ -196,6 +196,59 @@ class MilestoneFacts(FactPayload):
     label: str | None = Field(default=None, max_length=40)
 
 
+class TradeProposalFacts(FactPayload):
+    """Facts for a trade proposal awaiting human approval (F5, Interactive
+    Approval Channel -- FACTPRESS_DESIGN.md §7).
+
+    ``risk_note`` is host-authored context (e.g. a risk-team verdict), not
+    LLM copy -- like ``label`` on other event types, it passes through the
+    renderer's text-field whitelist untouched by the digit ban.
+    """
+
+    event_type: Literal["trade_proposal"] = "trade_proposal"
+    symbol: str = Field(min_length=1, max_length=20)
+    side: Literal["buy", "sell"]
+    qty: float = Field(gt=0)
+    limit_price: float | None = None
+    confidence_pct: float | None = None
+    plan_target_pct: float | None = None
+    plan_stop_pct: float | None = None
+    currency: str = "USD"
+    risk_note: str | None = Field(default=None, max_length=120)
+    label: str | None = Field(default=None, max_length=40)
+
+
+class CardState(StrEnum):
+    """The six deterministic template state layers for interactive cards
+    (FACTPRESS_DESIGN.md §7). The director never sees or sets these -- state
+    is applied by the engine, not art-directed.
+    """
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    EXECUTED = "executed"
+    FAILED = "failed"
+    EXPIRED = "expired"
+
+
+class StateInfo(BaseModel):
+    """State layer data for one interactive-card render.
+
+    Not part of ``DesignSpec`` -- the creative-director LLM never sees or
+    sets state; it is applied by the host/engine after a decision or
+    timeout. ``decider`` and ``note`` are host-authored display strings, not
+    LLM copy: no digit ban applies to them.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    state: CardState
+    decider: str | None = Field(default=None, max_length=40)
+    stamped_at: datetime | None = None
+    note: str | None = Field(default=None, max_length=80)
+
+
 class ReflectionRecapFacts(FactPayload):
     """Facts for a weekly reflection recap.
 
@@ -365,4 +418,5 @@ EVENT_MODELS: dict[str, type[FactPayload]] = {
     "digest_top_picks": DigestTopPicksFacts,
     "milestone": MilestoneFacts,
     "reflection_recap": ReflectionRecapFacts,
+    "trade_proposal": TradeProposalFacts,
 }

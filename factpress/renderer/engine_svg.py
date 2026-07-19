@@ -24,7 +24,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from factpress.renderer import format as fmt
 from factpress.renderer.sparkline import build_paths
-from factpress.schemas import EVENT_MODELS, DesignSpec, FactPayload
+from factpress.schemas import EVENT_MODELS, DesignSpec, FactPayload, StateInfo
 
 _FONTS_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
 _SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
@@ -79,6 +79,11 @@ def load_manifest(template_dir: Path) -> dict[str, Any]:
 
     if not isinstance(data["palettes_allowed"], list) or not data["palettes_allowed"]:
         raise ValueError(f"manifest at {path}: 'palettes_allowed' must be a non-empty list")
+
+    if "states" in data:
+        states = data["states"]
+        if not isinstance(states, list) or not states or not all(isinstance(s, str) for s in states):
+            raise ValueError(f"manifest at {path}: 'states' must be a non-empty list of strings")
 
     return data
 
@@ -184,7 +189,7 @@ def build_view(facts: FactPayload, spec: DesignSpec, brandkit: dict[str, Any]) -
     }
     text_fields = {
         k: str(getattr(facts, k))
-        for k in ("regime", "session", "label")
+        for k in ("regime", "session", "label", "risk_note")
         if getattr(facts, k, None)
     }
 
@@ -224,6 +229,43 @@ def build_view(facts: FactPayload, spec: DesignSpec, brandkit: dict[str, Any]) -
         "text_fields": text_fields,
         "picks": view_picks,
     }
+
+
+def _build_state_context(state: StateInfo | None) -> dict[str, Any] | None:
+    """Build the ``state`` render-context entry for an interactive card.
+
+    ``None`` when no state is applied (one-way templates, or an interactive
+    template rendered without a ``state`` kwarg) so templates can
+    ``{% if state %}``-guard the whole state-layer block. Reuses the same
+    aware-datetime -> UTC conversion rule as ``as_of`` in ``build_view``:
+    printing a local wall-clock stamp under a "UTC" label would put a false
+    fact on the image.
+    """
+    if state is None:
+        return None
+    stamped_at = None
+    if state.stamped_at is not None:
+        if state.stamped_at.tzinfo is not None:
+            stamped_at = fmt.format_timestamp(state.stamped_at.astimezone(UTC), tz_label="UTC")
+        else:
+            stamped_at = fmt.format_timestamp(state.stamped_at)
+    return {
+        "name": state.state.value,
+        "decider": state.decider,
+        "stamped_at": stamped_at,
+        "note": state.note,
+    }
+
+
+def _validate_state_against_manifest(state: StateInfo | None, manifest: dict[str, Any]) -> None:
+    if state is None:
+        return
+    manifest_states = manifest.get("states")
+    if not isinstance(manifest_states, list) or state.state.value not in manifest_states:
+        raise ValueError(
+            f"state {state.state.value!r} is not declared in manifest states "
+            f"{manifest_states!r}"
+        )
 
 
 def _validate_spec_against_manifest(
@@ -266,12 +308,22 @@ def render_svg(
     template_dir: Path,
     brandkit: dict[str, Any],
     size: str = "feed",
+    state: StateInfo | None = None,
 ) -> str:
-    """Render the full SVG markup for one (facts, spec) pair at ``size``."""
+    """Render the full SVG markup for one (facts, spec) pair at ``size``.
+
+    ``state`` (F5, Interactive Approval Channel) applies a deterministic
+    template state layer -- PENDING/APPROVED/REJECTED/EXECUTED/FAILED/
+    EXPIRED -- on top of the one-way render. Only usable when the template's
+    manifest declares that state name; otherwise raises ``ValueError``. The
+    director never sees or sets this: it is applied by the engine/host after
+    a decision or timeout, never art-directed.
+    """
     facts = _coerce_facts(facts)
     template_dir = Path(template_dir)
     manifest = load_manifest(template_dir)
     _validate_spec_against_manifest(spec, manifest, brandkit, size)
+    _validate_state_against_manifest(state, manifest)
 
     width, height = manifest["sizes"][size]
     view = build_view(facts, spec, brandkit)
@@ -288,6 +340,7 @@ def render_svg(
         "spec": spec.model_dump(mode="json"),
         "brand": brand,
         "view": view,
+        "state": _build_state_context(state),
     }
 
     env = Environment(
@@ -306,16 +359,20 @@ def render_png(
     template_dir: Path,
     brandkit: dict[str, Any] | str | Path,
     size: str = "feed",
+    state: StateInfo | None = None,
 ) -> bytes:
     """Render to PNG bytes via a hermetic, deterministic resvg invocation.
 
     ``brandkit`` may be a pre-loaded dict or a path to a brandkit YAML file.
+    ``state`` is forwarded to ``render_svg`` -- see its docstring.
     """
     template_dir = Path(template_dir)
     brandkit_dict = (
         load_brandkit(Path(brandkit)) if isinstance(brandkit, (str, Path)) else brandkit
     )
-    svg = render_svg(facts, spec, template_dir=template_dir, brandkit=brandkit_dict, size=size)
+    svg = render_svg(
+        facts, spec, template_dir=template_dir, brandkit=brandkit_dict, size=size, state=state
+    )
     manifest = load_manifest(template_dir)
     width, height = manifest["sizes"][size]
 
