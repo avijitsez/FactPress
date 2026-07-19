@@ -1,0 +1,14 @@
+{
+  "event_type": "reflection_recap",
+  "as_of": "2026-07-18T21:00:00+00:00",
+  "week_pnl_pct": 3.15,
+  "trades_count": 22,
+  "win_rate_pct": 63.5,
+  "best_day_pct": 2.8,
+  "worst_day_pct": -0.9,
+  "reflection_candidates": [
+    "Stayed patient waiting for confirmation instead of chasing early entries.",
+    "Sizing discipline mattered more than direction this week, especially after Tuesday's drawdown.",
+    "Cut a losing trade early on Wednesday and it saved the week."
+  ]
+}

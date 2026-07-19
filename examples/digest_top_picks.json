@@ -1,0 +1,37 @@
+{
+  "event_type": "digest_top_picks",
+  "as_of": "2026-07-18T13:30:00+00:00",
+  "picks": [
+    {
+      "symbol": "NVDA",
+      "score": 0.91,
+      "direction": "long",
+      "note": "Breaking out on volume expansion"
+    },
+    {
+      "symbol": "TSLA",
+      "score": 0.83,
+      "direction": "short",
+      "note": "Fading rally into resistance"
+    },
+    {
+      "symbol": "AMD",
+      "score": 0.76,
+      "direction": "long",
+      "note": null
+    },
+    {
+      "symbol": "MSFT",
+      "score": 0.68,
+      "direction": "short",
+      "note": "Drifting lower with weak breadth"
+    },
+    {
+      "symbol": "AAPL",
+      "score": 0.54,
+      "direction": "long",
+      "note": "Basing above key support"
+    }
+  ],
+  "picks_count": 5
+}

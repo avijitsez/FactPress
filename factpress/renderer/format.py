@@ -44,6 +44,23 @@ _KNOWN_LABELS = {
     "trades_count": "Trades",
     "equity": "Equity",
     "fill_price": "Fill price",
+    "pnl_pct": "P&L",
+    "pnl_abs": "P&L",
+    "week_pnl_pct": "Week P&L",
+    "mode_pnl_pct": "Mode P&L",
+    "realized_pnl_pct": "Realized P&L",
+    "realized_pnl_abs": "Realized P&L",
+    "open_positions_count": "Open positions",
+    "orders_used_count": "Orders used",
+    "orders_cap_count": "Orders cap",
+    "streak_count": "Streak",
+    "previous_best": "Previous best",
+    "best_day_pct": "Best day",
+    "worst_day_pct": "Worst day",
+    "hit_count": "Hits",
+    "miss_count": "Misses",
+    "watchlist_count": "Watchlist",
+    "picks_count": "Picks",
 }
 
 _ARROWS = {"up": "▲", "down": "▼", "flat": "▶"}
@@ -119,10 +136,9 @@ def format_number(value: float | int, *, precision: int | None = None) -> str:
 def humanize_key(key: str) -> str:
     """Map a fact key to a human display label.
 
-    Known keys (daily_pnl_pct, daily_pnl_abs, win_rate_pct, trades_count,
-    equity, fill_price) use hardcoded copy. Unknown keys fall back to a
-    generic transform: strip a trailing "_pct"/"_abs" suffix, split on
-    underscores, and capitalize only the first word, e.g.
+    Known keys (see ``_KNOWN_LABELS``) use hardcoded copy. Unknown keys fall
+    back to a generic transform: strip a trailing "_pct"/"_abs" suffix, split
+    on underscores, and capitalize only the first word, e.g.
     "max_drawdown_pct" -> "Max drawdown".
     """
     if key in _KNOWN_LABELS:

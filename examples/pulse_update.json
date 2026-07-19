@@ -1,0 +1,9 @@
+{
+  "event_type": "pulse_update",
+  "as_of": "2026-07-18T15:00:00+00:00",
+  "mode_pnl_pct": 0.42,
+  "open_positions_count": 3,
+  "orders_used_count": 7,
+  "orders_cap_count": 10,
+  "series": [100.0, 100.3, 100.1, 100.5, 100.4, 100.7, 100.6, 100.9]
+}
