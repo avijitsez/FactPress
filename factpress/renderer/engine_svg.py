@@ -24,7 +24,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from factpress.renderer import format as fmt
 from factpress.renderer.sparkline import build_paths
-from factpress.schemas import DailyPnlFacts, DesignSpec, FactPayload
+from factpress.schemas import EVENT_MODELS, DesignSpec, FactPayload
 
 _FONTS_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
 _SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
@@ -122,9 +122,8 @@ def _coerce_facts(facts: FactPayload | dict[str, Any]) -> FactPayload:
     if isinstance(facts, FactPayload):
         return facts
     if isinstance(facts, dict):
-        if facts.get("event_type") == "daily_pnl":
-            return DailyPnlFacts.model_validate(facts)
-        return FactPayload.model_validate(facts)
+        model = EVENT_MODELS.get(facts.get("event_type", ""), FactPayload)
+        return model.model_validate(facts)
     raise TypeError(f"facts must be a FactPayload or dict, got {type(facts).__name__}")
 
 

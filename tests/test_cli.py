@@ -106,3 +106,13 @@ def test_facts_with_no_numeric_metrics_exits_2(tmp_path, capsys):
     assert rc == 2
     err = capsys.readouterr().err
     assert "no numeric metric" in err
+
+
+def test_all_bundled_examples_render(tmp_path):
+    examples_dir = Path(__file__).resolve().parent.parent / "examples"
+    example_files = sorted(examples_dir.glob("*.json"))
+    assert len(example_files) == 7
+    for example in example_files:
+        rc = main(["render", str(example), "--out", str(tmp_path / f"{example.stem}.png")])
+        assert rc == 0, f"CLI render failed for {example.name}"
+        assert (tmp_path / f"{example.stem}.png").read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"

@@ -351,3 +351,18 @@ def validate_spec_for_facts(spec: DesignSpec, facts: FactPayload) -> None:
 
     if violations:
         raise SpecFactsMismatch(violations)
+
+
+# Single source of truth mapping event types to their facts models. Every
+# consumer (pipeline, CLI, engine dict-coercion, golden harness) resolves
+# dict payloads through this registry so nested models (e.g. PickItem)
+# always validate into real objects, never raw dicts.
+EVENT_MODELS: dict[str, type[FactPayload]] = {
+    "daily_pnl": DailyPnlFacts,
+    "trade_executed": TradeExecutedFacts,
+    "pulse_update": PulseUpdateFacts,
+    "session_digest": SessionDigestFacts,
+    "digest_top_picks": DigestTopPicksFacts,
+    "milestone": MilestoneFacts,
+    "reflection_recap": ReflectionRecapFacts,
+}
