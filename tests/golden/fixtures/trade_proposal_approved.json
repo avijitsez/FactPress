@@ -1,0 +1,39 @@
+{
+  "facts": {
+    "event_type": "trade_proposal",
+    "symbol": "NVDA",
+    "side": "buy",
+    "qty": 120,
+    "limit_price": 128.4,
+    "confidence_pct": 72.5,
+    "plan_target_pct": 6.5,
+    "plan_stop_pct": -2.5,
+    "currency": "USD",
+    "risk_note": "Risk team: within limits, size capped",
+    "as_of": "2026-07-19T09:00:00+00:00"
+  },
+  "spec": {
+    "template_id": "trade_proposal",
+    "template_version": "1.0.0",
+    "variant": "default",
+    "tone": "neutral",
+    "palette_id": "midnight",
+    "hero_metric_key": "limit_price",
+    "emphasis_keys": [
+      "qty",
+      "confidence_pct"
+    ],
+    "callout_keys": [
+      "plan_target_pct",
+      "plan_stop_pct"
+    ],
+    "headline": "NVDA",
+    "subhead": "Awaiting human approval",
+    "sparkline": false
+  },
+  "state": {
+    "state": "approved",
+    "decider": "Avijit",
+    "stamped_at": "2026-07-19T09:15:00+00:00"
+  }
+}

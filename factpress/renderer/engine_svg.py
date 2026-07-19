@@ -189,7 +189,7 @@ def build_view(facts: FactPayload, spec: DesignSpec, brandkit: dict[str, Any]) -
     }
     text_fields = {
         k: str(getattr(facts, k))
-        for k in ("regime", "session", "label", "risk_note")
+        for k in ("regime", "session", "label", "risk_note", "side")
         if getattr(facts, k, None)
     }
 

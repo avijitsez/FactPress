@@ -21,6 +21,20 @@
     "session_close@feed": "a6758d97a526c1b03a4f1ee9b8a04622456b1ed77a0bf0bfb4715afaf99dd141",
     "session_close@telegram": "8122ac488daacf0bb7ba9d59479749f82d23123126048e9e9ab5bf8091a0e266",
     "session_open@feed": "84ab84dab2f6f59e3c8a8f62696e2e2f845b1e565b7c02b96876c30a8b6bcc5c",
-    "session_open@telegram": "be603b7967b9fe0c2e3151e425eb3becf1c5518e435bdbb652f8f652a5c6ca02"
+    "session_open@telegram": "be603b7967b9fe0c2e3151e425eb3becf1c5518e435bdbb652f8f652a5c6ca02",
+    "trade_proposal@feed": "06f32d7b7360e44c736f9ab17da5c53be8144953a907d39e0c923fc65cc99819",
+    "trade_proposal@telegram": "ca85b6fff67ab8debf7d35b6fac38e9bf4b3aae3091cf392aa84be8f91ecc363",
+    "trade_proposal_approved@feed": "40ea34b5f4c292892dbaaeaec28140c998ca20884d40f6c9cedacad8ead7e0d4",
+    "trade_proposal_approved@telegram": "0127a32059c1e131005ea1b5fe32b83feb7945ef110c172b4c9eec9fc57a5ce1",
+    "trade_proposal_executed@feed": "954fdc229bd0171c0e67bd0f58057fe0a865be1d1bc8577861b62286146add6b",
+    "trade_proposal_executed@telegram": "5b0fd6f5e45a6ab0fc07a6a7312c7eb5eb57c43373aafcf45e69997b3c5acba4",
+    "trade_proposal_expired@feed": "07eb696631a5d582af03b7100df88229297db31cd807d1349df6f20377e9db8d",
+    "trade_proposal_expired@telegram": "fbcc4ad8022b4ecb617ea6b2fc3a6089362d8b01d8553caf5b2579c67eedb501",
+    "trade_proposal_failed@feed": "014e28b9dbdd4470a8697e1b3060a0ed6b99de25db8d7068945a0cdd64844597",
+    "trade_proposal_failed@telegram": "dfe4b94c9c4b8c21715bf5b6378a9c08cb572be2a4fb9bdadc3b0607ebc5358b",
+    "trade_proposal_pending@feed": "a83acee37af480206fe0b6dcb0780cea47c3130d2c13eae6e93982c9e92df15f",
+    "trade_proposal_pending@telegram": "42770beb7eafbd5cfaf2d39f6848c13da8012e8761b4bbe4431383b93668b95c",
+    "trade_proposal_rejected@feed": "06c48eed344af638a1dffdf58b602b23f48cb922c3a11cbcefb2239fb071ab8c",
+    "trade_proposal_rejected@telegram": "71df3889679cd17d2cfb41f12632fadbff7bc09b165921a459913640b0ce66b6"
   }
 }

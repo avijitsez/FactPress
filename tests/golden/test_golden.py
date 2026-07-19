@@ -17,13 +17,14 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 
 from factpress.pipeline import _EVENT_MODELS
 from factpress.renderer.engine_svg import load_brandkit, render_png
-from factpress.schemas import DesignSpec, FactPayload
+from factpress.schemas import DesignSpec, FactPayload, StateInfo
 
 _GOLDEN_DIR = Path(__file__).resolve().parent
 _FIXTURES_DIR = _GOLDEN_DIR / "fixtures"
@@ -39,19 +40,31 @@ _SIZES = ["feed", "telegram"]
 _FACTS_MODELS: dict[str, type[FactPayload]] = _EVENT_MODELS
 
 
-def _load_fixture(name: str) -> tuple[FactPayload, DesignSpec]:
+def _load_fixture(name: str) -> tuple[FactPayload, DesignSpec, StateInfo | None]:
     data = json.loads((_FIXTURES_DIR / f"{name}.json").read_text(encoding="utf-8"))
     facts_data = data["facts"]
     model = _FACTS_MODELS[facts_data["event_type"]]
     facts = model.model_validate(facts_data)
     spec = DesignSpec.model_validate(data["spec"])
-    return facts, spec
+
+    state = None
+    state_data = data.get("state")
+    if state_data is not None:
+        state_kwargs = dict(state_data)
+        stamped_at = state_kwargs.get("stamped_at")
+        if stamped_at is not None:
+            state_kwargs["stamped_at"] = datetime.fromisoformat(stamped_at)
+        state = StateInfo(**state_kwargs)
+
+    return facts, spec, state
 
 
 def _render(name: str, size: str, brandkit: dict) -> bytes:
-    facts, spec = _load_fixture(name)
+    facts, spec, state = _load_fixture(name)
     template_dir = _REPO_ROOT / "templates" / spec.template_id
-    return render_png(facts, spec, template_dir=template_dir, brandkit=brandkit, size=size)
+    return render_png(
+        facts, spec, template_dir=template_dir, brandkit=brandkit, size=size, state=state
+    )
 
 
 def _sha256(data: bytes) -> str:
