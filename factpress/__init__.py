@@ -22,7 +22,7 @@ from factpress.director import Director, DirectorConfig, fallback_spec
 from factpress.publisher import MessageRef, PublishError, Publisher, PublisherConfig
 from factpress.schemas import DailyPnlFacts, DesignSpec, FactPayload, TradeExecutedFacts
 
-__version__ = "0.1.0.dev0"
+__version__ = "0.1.0"
 
 __all__ = [
     "FactPress",
