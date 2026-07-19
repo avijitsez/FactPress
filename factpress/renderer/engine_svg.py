@@ -189,6 +189,27 @@ def build_view(facts: FactPayload, spec: DesignSpec, brandkit: dict[str, Any]) -
         if getattr(facts, k, None)
     }
 
+    # Structured facts-passthrough for DigestTopPicksFacts: a ranked list of
+    # PickItem objects doesn't fit the numeric hero/delta_chips/callouts
+    # machinery (score/direction/note aren't independently-keyed metrics),
+    # so it's whitelisted through like text_lists/text_fields above. Rank is
+    # a renderer-formatted ordinal string (digits from the renderer, not LLM
+    # copy, so the digit-ban is untouched); everything else is a verbatim
+    # host-authored fact.
+    picks = getattr(facts, "picks", None)
+    view_picks = None
+    if isinstance(picks, list) and picks:
+        view_picks = [
+            {
+                "rank": str(i),
+                "symbol": p.symbol,
+                "score_str": fmt.format_number(p.score, precision=2),
+                "direction": p.direction,
+                "note": p.note,
+            }
+            for i, p in enumerate(picks, 1)
+        ]
+
     return {
         "headline": spec.headline,
         "subhead": spec.subhead,
@@ -202,6 +223,7 @@ def build_view(facts: FactPayload, spec: DesignSpec, brandkit: dict[str, Any]) -
         "reflection": reflection,
         "text_lists": text_lists,
         "text_fields": text_fields,
+        "picks": view_picks,
     }
 
 

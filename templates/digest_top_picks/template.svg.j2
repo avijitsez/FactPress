@@ -1,0 +1,223 @@
+{#-
+  digest_top_picks — daily "Ranked candidate list" template.
+  Consumes the render context defined in docs/rendering-contract.md:
+  W, H, size ("feed" | "telegram"), spec, brand {fonts, logo_text, watermark,
+  palette}, view {headline, subhead, emoji, hero, delta_chips, callouts,
+  sparkline, as_of, footer, text_lists, text_fields, picks}.
+
+  view.picks is the structured facts-passthrough for DigestTopPicksFacts: a
+  list of {rank, symbol, score_str, direction, note}, already fully
+  formatted by the renderer (build_view) -- rank is a renderer-produced
+  ordinal string, score_str comes from format.format_number, direction/note
+  are verbatim host-authored facts. Not LLM copy, so no digit-ban applies,
+  but still plain (autoescaped) text -- never |safe.
+
+  Layout: hero is a small supporting label (e.g. a candidate count), never
+  the giant headline figure daily_pnl uses -- the ranked list IS the card.
+  - feed: full-width rows, rank medallion (filled accent circle for rank 1,
+    outlined for the rest), symbol bold, optional direction badge, optional
+    muted note below, score right-aligned mono.
+  - telegram: single-column stacked rows when picks.length <= 4; a
+    two-column grid (row-major: rank 1/2 share the top row, etc.) when
+    picks.length > 4, since the landscape canvas has little vertical room.
+
+  No formatting logic here -- every numeral in `view` already arrives fully
+  formatted by the renderer. This template only lays things out.
+-#}
+{%- set pal = brand.palette -%}
+{%- set sans = brand.fonts.sans -%}
+{%- set mono = brand.fonts.mono -%}
+
+{%- macro hero_fill() -%}
+{%- if view.hero.color_role == 'positive' -%}{{ pal.positive }}{%- elif view.hero.color_role == 'negative' -%}{{ pal.negative }}{%- else -%}{{ pal.fg }}{%- endif -%}
+{%- endmacro -%}
+
+{#- one ranked-candidate row: medallion + symbol + optional direction badge
+    + optional muted note, score right-aligned mono at the row's right edge.
+    Reads outer-scope pal/sans/mono (same pattern as the arrow/dir macros
+    above), so only the per-row geometry is passed in. -#}
+{%- macro pick_row(pick, x, y, w, medallion_d, symbol_size, score_size, badge_size, note_size) -%}
+{%- set is_top = pick.rank == '1' -%}
+{%- set cy = y + medallion_d * 0.5 -%}
+<circle cx="{{ x + medallion_d * 0.5 }}" cy="{{ cy }}" r="{{ medallion_d * 0.5 - 1 }}"
+    fill="{{ pal.accent if is_top else 'none' }}"
+    {%- if not is_top %} stroke="{{ pal.accent }}" stroke-width="2"{%- endif %}/>
+<text x="{{ x + medallion_d * 0.5 }}" y="{{ cy + medallion_d * 0.14 }}" text-anchor="middle"
+    font-family="{{ mono }}" font-weight="700" font-size="{{ medallion_d * 0.42 }}"
+    fill="{{ pal.bg if is_top else pal.accent }}">{{ pick.rank }}</text>
+
+{%- set text_x = x + medallion_d + medallion_d * 0.35 -%}
+{%- set symbol_y = y + medallion_d * 0.42 -%}
+<text x="{{ text_x }}" y="{{ symbol_y }}" font-family="{{ sans }}" font-weight="800"
+    font-size="{{ symbol_size }}" fill="{{ pal.fg }}">{{ pick.symbol }}</text>
+
+{%- if pick.direction is not none %}
+{%- set badge_color = pal.positive if pick.direction == 'long' else pal.negative -%}
+{%- set badge_x = text_x + (pick.symbol | length) * symbol_size * 0.62 + medallion_d * 0.3 -%}
+{%- set badge_w = badge_size * 3.6 -%}
+{%- set badge_h2 = badge_size * 1.9 -%}
+<rect x="{{ badge_x }}" y="{{ symbol_y - badge_h2 * 0.72 }}" width="{{ badge_w }}" height="{{ badge_h2 }}"
+    rx="{{ badge_h2 * 0.5 }}" fill="{{ badge_color }}" opacity="0.18"/>
+<text x="{{ badge_x + badge_w * 0.5 }}" y="{{ symbol_y - badge_h2 * 0.72 + badge_h2 * 0.68 }}"
+    text-anchor="middle" font-family="{{ sans }}" font-weight="700" font-size="{{ badge_size }}"
+    fill="{{ badge_color }}">{{ pick.direction | upper }}</text>
+{%- endif %}
+
+{%- if pick.note is not none %}
+<text x="{{ text_x }}" y="{{ symbol_y + note_size + medallion_d * 0.12 }}" font-family="{{ sans }}"
+    font-weight="400" font-size="{{ note_size }}" fill="{{ pal.muted }}">{{ pick.note }}</text>
+{%- endif %}
+
+<text x="{{ x + w }}" y="{{ symbol_y }}" text-anchor="end" font-family="{{ mono }}"
+    font-weight="700" font-size="{{ score_size }}" fill="{{ pal.fg }}">{{ pick.score_str }}</text>
+{%- endmacro -%}
+
+{%- set margin = W * 0.065 -%}
+{%- set safe_w = W - margin * 2 -%}
+{%- set logo_size = [W * 0.020, 16] | max -%}
+{%- set meta_size = [W * 0.0145, 12] | max -%}
+{%- set footer_size = [W * 0.013, 11] | max -%}
+{%- set header_baseline = margin + logo_size -%}
+{%- set n_picks = view.picks | length if view.picks else 0 -%}
+
+<svg width="{{ W }}" height="{{ H }}" viewBox="0 0 {{ W }} {{ H }}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="{{ pal.grad_from }}"/>
+      <stop offset="100%" stop-color="{{ pal.grad_to }}"/>
+    </linearGradient>
+    <linearGradient id="accentGradV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="{{ pal.grad_from }}"/>
+      <stop offset="100%" stop-color="{{ pal.grad_to }}"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="{{ W }}" height="{{ H }}" fill="{{ pal.bg }}"/>
+
+  <!-- gradient accent wash: a large soft diagonal shape behind the header -->
+  <rect x="{{ W * 0.30 }}" y="{{ H * -0.22 }}" width="{{ W * 0.95 }}" height="{{ H * 0.5 }}"
+        rx="{{ margin }}" fill="url(#accentGrad)" opacity="0.14"
+        transform="rotate(-10 {{ W / 2 }} {{ H * 0.05 }})"/>
+
+  <!-- brand mark: small gradient accent bar beside the logo text -->
+  <rect x="{{ margin }}" y="{{ header_baseline - logo_size * 0.78 }}"
+        width="{{ logo_size * 0.34 }}" height="{{ logo_size * 0.78 }}"
+        rx="{{ logo_size * 0.12 }}" fill="url(#accentGradV)"/>
+  <text x="{{ margin + logo_size * 0.55 }}" y="{{ header_baseline }}"
+        font-family="{{ sans }}" font-weight="700" font-size="{{ logo_size }}"
+        fill="{{ pal.fg }}">{{ brand.logo_text }}</text>
+
+  {%- if view.as_of %}
+  <text x="{{ W - margin }}" y="{{ header_baseline }}" text-anchor="end"
+        font-family="{{ sans }}" font-weight="400" font-size="{{ meta_size }}"
+        fill="{{ pal.muted }}">{{ view.as_of }}</text>
+  {%- endif %}
+
+{%- if size == 'feed' %}
+{#- ============================== FEED (portrait, stacked) ============================== -#}
+  {%- set headline_size = [W * 0.055, 30] | max -%}
+  {%- set subhead_size = [W * 0.024, 16] | max -%}
+  {%- set hero_label_size = [W * 0.018, 13] | max -%}
+  {%- set hero_value_size = [W * 0.032, 20] | max -%}
+  {%- set medallion_d = [W * 0.062, 46] | max -%}
+  {%- set symbol_size = [W * 0.026, 18] | max -%}
+  {%- set score_size = [W * 0.024, 16] | max -%}
+  {%- set badge_size = [W * 0.0145, 11] | max -%}
+  {%- set note_size = [W * 0.017, 12] | max -%}
+
+  {%- set ns = namespace(y = margin + logo_size + margin * 0.9) -%}
+  {%- set ns.y = ns.y + headline_size %}
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="800"
+        font-size="{{ headline_size }}" fill="{{ pal.fg }}">{{ view.headline }}</text>
+
+  {%- if view.subhead %}
+  {%- set ns.y = ns.y + subhead_size + margin * 0.35 %}
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ subhead_size }}" fill="{{ pal.muted }}">{{ view.subhead }}</text>
+  {%- endif %}
+
+  {#- hero: a small supporting label, never the headline figure here -- the
+      ranked list below is the card's main content. -#}
+  {%- set ns.y = ns.y + margin * 0.55 + hero_value_size %}
+  <text x="{{ margin }}" y="{{ ns.y - hero_value_size * 0.72 }}" font-family="{{ sans }}"
+        font-weight="600" font-size="{{ hero_label_size }}" fill="{{ pal.muted }}">{{ view.hero.label }}</text>
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ mono }}" font-weight="700"
+        font-size="{{ hero_value_size }}" fill="{{ hero_fill() }}">{{ view.hero.value }}</text>
+  {%- set ns.y = ns.y + margin * 0.55 %}
+
+  {#- ranked list: full-width rows -#}
+  {%- if view.picks %}
+  {%- set row_h = [(H - ns.y - margin) / n_picks, medallion_d + note_size + margin * 0.4] | min -%}
+  {%- for pick in view.picks %}
+  {{ pick_row(pick, margin, ns.y + loop.index0 * row_h, safe_w, medallion_d, symbol_size, score_size, badge_size, note_size) }}
+  {%- endfor %}
+  {%- endif %}
+
+{%- else %}
+{#- ============================== TELEGRAM (landscape) ============================== -#}
+  {%- set headline_size = [W * 0.034, 22] | max -%}
+  {%- set subhead_size = [W * 0.017, 13] | max -%}
+  {%- set hero_label_size = [W * 0.015, 11] | max -%}
+  {%- set hero_value_size = [W * 0.022, 16] | max -%}
+
+  {%- set ns = namespace(y = margin + logo_size + margin * 0.9) -%}
+  {%- set ns.y = ns.y + headline_size %}
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="800"
+        font-size="{{ headline_size }}" fill="{{ pal.fg }}">{{ view.headline }}</text>
+
+  {%- if view.subhead %}
+  {%- set ns.y = ns.y + subhead_size + margin * 0.28 %}
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ subhead_size }}" fill="{{ pal.muted }}">{{ view.subhead }}</text>
+  {%- endif %}
+
+  {%- set ns.y = ns.y + margin * 0.4 + hero_value_size %}
+  <text x="{{ margin }}" y="{{ ns.y - hero_value_size * 0.68 }}" font-family="{{ sans }}"
+        font-weight="600" font-size="{{ hero_label_size }}" fill="{{ pal.muted }}">{{ view.hero.label }}</text>
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ mono }}" font-weight="700"
+        font-size="{{ hero_value_size }}" fill="{{ hero_fill() }}">{{ view.hero.value }}</text>
+  {%- set ns.y = ns.y + margin * 0.4 %}
+
+  {%- if view.picks %}
+    {%- if n_picks <= 4 %}
+    {#- single column, stacked full-width rows -#}
+    {%- set medallion_d = [H * 0.075, 34] | max -%}
+    {%- set symbol_size = [W * 0.019, 14] | max -%}
+    {%- set score_size = [W * 0.017, 13] | max -%}
+    {%- set badge_size = [W * 0.0115, 9] | max -%}
+    {%- set note_size = [W * 0.0125, 10] | max -%}
+    {%- set row_h = [(H - ns.y - margin) / n_picks, medallion_d + note_size + margin * 0.25] | min -%}
+    {%- for pick in view.picks %}
+    {{ pick_row(pick, margin, ns.y + loop.index0 * row_h, safe_w, medallion_d, symbol_size, score_size, badge_size, note_size) }}
+    {%- endfor %}
+    {%- else %}
+    {#- two-column grid, row-major: rank 1/2 share the top row, etc. -#}
+    {%- set medallion_d = [H * 0.062, 28] | max -%}
+    {%- set symbol_size = [W * 0.0155, 12] | max -%}
+    {%- set score_size = [W * 0.014, 11] | max -%}
+    {%- set badge_size = [W * 0.0095, 8] | max -%}
+    {%- set note_size = [W * 0.0105, 9] | max -%}
+    {%- set col_gap = margin * 0.5 -%}
+    {%- set col_w = (safe_w - col_gap) / 2 -%}
+    {%- set n_rows = ((n_picks - 1) // 2) + 1 -%}
+    {%- set row_h = [(H - ns.y - margin) / n_rows, medallion_d + note_size + margin * 0.2] | min -%}
+    {%- for pick in view.picks %}
+    {%- set col = loop.index0 % 2 -%}
+    {%- set row = (loop.index0 // 2) -%}
+    {%- set rx = margin + col * (col_w + col_gap) -%}
+    {%- set ry = ns.y + row * row_h -%}
+    {{ pick_row(pick, rx, ry, col_w, medallion_d, symbol_size, score_size, badge_size, note_size) }}
+    {%- endfor %}
+    {%- endif %}
+  {%- endif %}
+{%- endif %}
+
+  <!-- footer + watermark -->
+  <text x="{{ margin }}" y="{{ H - margin * 0.55 }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ footer_size }}" fill="{{ pal.muted }}">{{ view.footer }}</text>
+  {%- if brand.watermark %}
+  <text x="{{ W - margin }}" y="{{ H - margin * 0.55 }}" text-anchor="end"
+        font-family="{{ sans }}" font-weight="700" font-size="{{ footer_size }}"
+        fill="{{ pal.muted }}" opacity="0.6">{{ brand.logo_text }}</text>
+  {%- endif %}
+</svg>

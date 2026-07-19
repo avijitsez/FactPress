@@ -1,0 +1,51 @@
+{
+  "facts": {
+    "event_type": "digest_top_picks",
+    "picks": [
+      {
+        "symbol": "NVDA",
+        "score": 0.91,
+        "direction": "long",
+        "note": "Breaking out on volume expansion"
+      },
+      {
+        "symbol": "TSLA",
+        "score": 0.83,
+        "direction": "short",
+        "note": "Fading rally into resistance"
+      },
+      {
+        "symbol": "AMD",
+        "score": 0.76,
+        "direction": "long",
+        "note": null
+      },
+      {
+        "symbol": "MSFT",
+        "score": 0.68,
+        "direction": "short",
+        "note": "Drifting lower with weak breadth"
+      },
+      {
+        "symbol": "AAPL",
+        "score": 0.54,
+        "direction": "long",
+        "note": "Basing above key support"
+      }
+    ],
+    "picks_count": 5,
+    "as_of": "2026-07-18T13:30:00+00:00"
+  },
+  "spec": {
+    "template_id": "digest_top_picks",
+    "template_version": "1.0.0",
+    "tone": "neutral",
+    "palette_id": "ember",
+    "hero_metric_key": "picks_count",
+    "emphasis_keys": [],
+    "callout_keys": [],
+    "headline": "Scout digest top picks",
+    "subhead": "Ranked candidates from overnight screening",
+    "sparkline": false
+  }
+}

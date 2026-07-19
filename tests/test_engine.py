@@ -10,7 +10,14 @@ from factpress.renderer.engine_svg import (
     render_png,
     render_svg,
 )
-from factpress.schemas import DailyPnlFacts, DesignSpec, SessionDigestFacts, Tone
+from factpress.schemas import (
+    DailyPnlFacts,
+    DesignSpec,
+    DigestTopPicksFacts,
+    PickItem,
+    SessionDigestFacts,
+    Tone,
+)
 
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates" / "daily_pnl"
 BRANDKIT_PATH = Path(__file__).resolve().parent.parent / "brandkits" / "default.yaml"
@@ -301,9 +308,50 @@ def test_daily_pnl_view_otherwise_unchanged_by_text_passthrough(brandkit):
         "reflection",
         "text_lists",
         "text_fields",
+        "picks",
     }
     assert set(view.keys()) == expected_keys
     assert view["headline"] == spec.headline
     assert view["hero"]["label"] == "Daily P&L"
     assert view["delta_chips"][0]["label"] == "Win rate"
     assert view["callouts"][0]["label"] == "Trades"
+
+
+# ---------------------------------------------------------------------------
+# structured picks passthrough (view["picks"])
+# ---------------------------------------------------------------------------
+
+
+def test_picks_populated_and_formatted_for_digest_top_picks_facts(brandkit):
+    facts = DigestTopPicksFacts(
+        picks=[
+            PickItem(symbol="AAPL", score=0.87, direction="long", note="Momentum breakout"),
+            PickItem(symbol="TSLA", score=0.74, direction="short"),
+            PickItem(symbol="NVDA", score=0.65, direction="long", note="Earnings drift"),
+            PickItem(symbol="MSFT", score=0.52, direction=None),
+            PickItem(symbol="AMD", score=0.41, direction="short", note="Fade the gap"),
+        ],
+        picks_count=5,
+    )
+    spec = make_spec(
+        template_id="digest_top_picks",
+        hero_metric_key="picks_count",
+        emphasis_keys=[],
+        callout_keys=[],
+    )
+    view = build_view(facts, spec, brandkit)
+    assert view["picks"] is not None
+    assert [p["rank"] for p in view["picks"]] == ["1", "2", "3", "4", "5"]
+    assert view["picks"][0]["symbol"] == "AAPL"
+    assert view["picks"][0]["score_str"] == "0.87"
+    assert view["picks"][0]["direction"] == "long"
+    assert view["picks"][0]["note"] == "Momentum breakout"
+    assert view["picks"][3]["direction"] is None
+    assert view["picks"][3]["note"] is None
+
+
+def test_picks_none_when_facts_has_no_picks_list(brandkit):
+    facts = make_facts()
+    spec = make_spec()
+    view = build_view(facts, spec, brandkit)
+    assert view["picks"] is None
