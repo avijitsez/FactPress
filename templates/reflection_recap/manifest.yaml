@@ -1,0 +1,26 @@
+id: reflection_recap
+version: 1.0.0
+name: "Weekly reflection"
+variants:
+  - default
+
+sizes:
+  feed: [1080, 1350]
+  telegram: [1280, 720]
+
+slots:
+  headline:
+    max: 60
+  subhead:
+    max: 90
+  emoji:
+    max: 4
+
+palettes_allowed:
+  - midnight
+  - ember
+  - aurora
+
+sparkline: none
+states:
+  - static

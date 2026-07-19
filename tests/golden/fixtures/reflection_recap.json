@@ -1,0 +1,30 @@
+{
+  "facts": {
+    "event_type": "reflection_recap",
+    "week_pnl_pct": 3.15,
+    "trades_count": 22,
+    "win_rate_pct": 63.5,
+    "best_day_pct": 2.8,
+    "worst_day_pct": -0.9,
+    "reflection_candidates": [
+      "Stayed patient waiting for confirmation instead of chasing early entries.",
+      "The week's real lesson was about sizing, not direction: the biggest drawdown came from a correctly-called trade held far past the plan's target because conviction crept up mid-position, and the recovery only started once every entry went back to being sized off the written risk plan rather than off how confident the setup felt in the moment.",
+      "Cut a losing trade early on Wednesday and it saved the week."
+    ],
+    "as_of": "2026-07-18T21:00:00+00:00"
+  },
+  "spec": {
+    "template_id": "reflection_recap",
+    "template_version": "1.0.0",
+    "variant": "default",
+    "tone": "neutral",
+    "palette_id": "aurora",
+    "hero_metric_key": "week_pnl_pct",
+    "emphasis_keys": ["win_rate_pct", "trades_count"],
+    "callout_keys": ["best_day_pct", "worst_day_pct"],
+    "headline": "Week in review",
+    "subhead": "Steady grind, discipline held through the chop",
+    "sparkline": false,
+    "reflection_index": 1
+  }
+}

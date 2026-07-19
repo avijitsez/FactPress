@@ -1,0 +1,352 @@
+{#-
+  reflection_recap — weekly numbers + one prose reflection slot.
+  Consumes the render context defined in docs/rendering-contract.md:
+  W, H, size ("feed" | "telegram"), spec, brand {fonts, logo_text, watermark,
+  palette}, view {headline, subhead, emoji, hero, delta_chips, callouts,
+  sparkline, as_of, footer, reflection}.
+
+  Layout: top half is the week's numbers (hero week_pnl_pct colored by
+  color_role, win-rate/trades chips, best/worst-day callouts). Bottom half
+  is the reflection panel: a surface-colored rounded card with an accent
+  left rule and an oversized decorative quote glyph, holding the SELECTED
+  reflection candidate (view.reflection -- already chosen by index and
+  truncated to its slot cap by the engine; this template never selects or
+  trims text, only wraps it for display). Guarded by {% if view.reflection %}
+  since reflection_index may be None (view.reflection is None then).
+
+  Insights-by-reference (FACTPRESS_DESIGN.md §8 / insights-by-reference):
+  the director selects prose by index, it never authors it. view.reflection
+  is host-authored text passed through untouched except for engine-side
+  truncation -- rendered here as plain (autoescaped) text, never |safe.
+
+  No formatting logic here -- every numeral in `view` already arrives fully
+  formatted by the renderer. This template only lays things out.
+-#}
+{%- set pal = brand.palette -%}
+{%- set sans = brand.fonts.sans -%}
+{%- set mono = brand.fonts.mono -%}
+
+{%- macro arrow_glyph(d) -%}
+{%- if d == 'up' -%}▲{%- elif d == 'down' -%}▼{%- else -%}●{%- endif -%}
+{%- endmacro -%}
+
+{%- macro dir_color(d) -%}
+{%- if d == 'up' -%}{{ pal.positive }}{%- elif d == 'down' -%}{{ pal.negative }}{%- else -%}{{ pal.muted }}{%- endif -%}
+{%- endmacro -%}
+
+{%- macro hero_fill() -%}
+{%- if view.hero.color_role == 'positive' -%}{{ pal.positive }}{%- elif view.hero.color_role == 'negative' -%}{{ pal.negative }}{%- else -%}{{ pal.fg }}{%- endif -%}
+{%- endmacro -%}
+
+{#- Pure-Jinja greedy word-wrap: mutates `ns.lines` (a namespace passed by
+    reference) by appending wrapped lines of `text`, each at most ~`width`
+    chars, never splitting a word, capped at `max_lines` lines total (any
+    remainder is folded into the final line rather than dropped). This is
+    deterministic -- no regex backtracking, no locale-sensitive break
+    rules -- and the engine's 220-char reflection cap keeps real input well
+    within `max_lines` at the widths used below. -#}
+{%- macro wrap_text(ns, text, width, max_lines) -%}
+{%- set words = text.split(' ') -%}
+{%- set line_ns = namespace(current='') -%}
+{%- for word in words -%}
+  {%- set candidate = (line_ns.current + ' ' + word) if line_ns.current else word -%}
+  {%- if (candidate | length > width) and line_ns.current and (ns.lines | length < max_lines - 1) -%}
+    {%- set ns.lines = ns.lines + [line_ns.current] -%}
+    {%- set line_ns.current = word -%}
+  {%- else -%}
+    {%- set line_ns.current = candidate -%}
+  {%- endif -%}
+{%- endfor -%}
+{%- if line_ns.current -%}
+  {%- set ns.lines = ns.lines + [line_ns.current] -%}
+{%- endif -%}
+{%- endmacro -%}
+
+{%- set margin = W * 0.065 -%}
+{%- set safe_w = W - margin * 2 -%}
+{%- set logo_size = [W * 0.020, 16] | max -%}
+{%- set meta_size = [W * 0.0145, 12] | max -%}
+{%- set footer_size = [W * 0.013, 11] | max -%}
+{%- set header_baseline = margin + logo_size -%}
+
+<svg width="{{ W }}" height="{{ H }}" viewBox="0 0 {{ W }} {{ H }}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="{{ pal.grad_from }}"/>
+      <stop offset="100%" stop-color="{{ pal.grad_to }}"/>
+    </linearGradient>
+    <linearGradient id="accentGradV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="{{ pal.grad_from }}"/>
+      <stop offset="100%" stop-color="{{ pal.grad_to }}"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="{{ W }}" height="{{ H }}" fill="{{ pal.bg }}"/>
+
+  <!-- gradient accent wash: a large soft diagonal shape behind the header -->
+  <rect x="{{ W * 0.30 }}" y="{{ H * -0.22 }}" width="{{ W * 0.95 }}" height="{{ H * 0.5 }}"
+        rx="{{ margin }}" fill="url(#accentGrad)" opacity="0.14"
+        transform="rotate(-10 {{ W / 2 }} {{ H * 0.05 }})"/>
+
+  <!-- brand mark: small gradient accent bar beside the logo text -->
+  <rect x="{{ margin }}" y="{{ header_baseline - logo_size * 0.78 }}"
+        width="{{ logo_size * 0.34 }}" height="{{ logo_size * 0.78 }}"
+        rx="{{ logo_size * 0.12 }}" fill="url(#accentGradV)"/>
+  <text x="{{ margin + logo_size * 0.55 }}" y="{{ header_baseline }}"
+        font-family="{{ sans }}" font-weight="700" font-size="{{ logo_size }}"
+        fill="{{ pal.fg }}">{{ brand.logo_text }}</text>
+
+  {%- if view.as_of %}
+  <text x="{{ W - margin }}" y="{{ header_baseline }}" text-anchor="end"
+        font-family="{{ sans }}" font-weight="400" font-size="{{ meta_size }}"
+        fill="{{ pal.muted }}">{{ view.as_of }}</text>
+  {%- endif %}
+
+{%- if size == 'feed' %}
+{#- ============================== FEED (portrait, stacked) ============================== -#}
+  {%- set headline_size = [W * 0.052, 30] | max -%}
+  {%- set subhead_size = [W * 0.024, 16] | max -%}
+  {%- set hero_label_size = [W * 0.020, 14] | max -%}
+  {%- set hero_value_size = W * 0.150 -%}
+  {%- set chip_h = [H * 0.052, 50] | max -%}
+  {%- set chip_label_size = [W * 0.0145, 11] | max -%}
+  {%- set chip_value_size = [W * 0.021, 15] | max -%}
+  {%- set callout_value_size = [W * 0.018, 13] | max -%}
+  {%- set callout_label_size = [W * 0.0135, 10] | max -%}
+  {%- set reflection_size = [W * 0.0225, 15] | max -%}
+  {%- set wrap_width = 46 -%}
+  {%- set max_lines = 5 -%}
+
+  {%- set ns = namespace(y = margin + logo_size + margin * 0.9) -%}
+
+  {%- set headline_x = margin -%}
+  {%- if view.emoji -%}
+    {%- set emoji_w = headline_size * 1.15 -%}
+    {%- set headline_x = margin + emoji_w -%}
+  {%- endif %}
+  {%- set ns.y = ns.y + headline_size %}
+  {%- if view.emoji %}
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ sans }}" font-size="{{ headline_size }}"
+        fill="{{ pal.fg }}">{{ view.emoji }}</text>
+  {%- endif %}
+  <text x="{{ headline_x }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="800"
+        font-size="{{ headline_size }}" fill="{{ pal.fg }}">{{ view.headline }}</text>
+
+  {%- if view.subhead %}
+  {%- set ns.y = ns.y + subhead_size + margin * 0.35 %}
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ subhead_size }}" fill="{{ pal.muted }}">{{ view.subhead }}</text>
+  {%- endif %}
+
+  {#- hero: week_pnl_pct, colored by color_role -#}
+  {%- set hero_y = ns.y + margin * 0.55 + hero_value_size * 0.72 %}
+  <text x="{{ W / 2 }}" y="{{ hero_y - hero_value_size * 0.70 }}" text-anchor="middle"
+        font-family="{{ sans }}" font-weight="600" font-size="{{ hero_label_size }}"
+        fill="{{ pal.muted }}">{{ view.hero.label }}</text>
+  <text x="{{ W / 2 }}" y="{{ hero_y }}" text-anchor="middle"
+        font-family="{{ mono }}" font-weight="700" font-size="{{ hero_value_size }}"
+        fill="{{ hero_fill() }}"><tspan font-size="{{ hero_value_size * 0.48 }}">{{ arrow_glyph(view.hero.direction) }} </tspan>{{ view.hero.value }}</text>
+
+  {%- set ns.y = hero_y + hero_value_size * 0.38 + margin * 0.75 %}
+
+  {#- chips row: win rate / trades -#}
+  {%- set n_chips = view.delta_chips | length -%}
+  {%- if n_chips > 0 %}
+  {%- set chip_gap = margin * 0.4 -%}
+  {%- set chip_w = (safe_w - chip_gap * (n_chips - 1)) / n_chips -%}
+  {%- for chip in view.delta_chips %}
+  {%- set cx = margin + loop.index0 * (chip_w + chip_gap) %}
+  <rect x="{{ cx }}" y="{{ ns.y }}" width="{{ chip_w }}" height="{{ chip_h }}"
+        rx="{{ chip_h / 2 }}" fill="{{ pal.chip_bg }}"/>
+  <text x="{{ cx + chip_w * 0.5 }}" y="{{ ns.y + chip_h * 0.40 }}" text-anchor="middle"
+        font-family="{{ sans }}" font-weight="400" font-size="{{ chip_label_size }}"
+        fill="{{ pal.muted }}">{{ chip.label }}</text>
+  <text x="{{ cx + chip_w * 0.5 }}" y="{{ ns.y + chip_h * 0.76 }}" text-anchor="middle"
+        font-family="{{ mono }}" font-weight="700" font-size="{{ chip_value_size }}"
+        fill="{{ dir_color(chip.direction) }}">{{ arrow_glyph(chip.direction) }} {{ chip.value }}</text>
+  {%- endfor %}
+  {%- set ns.y = ns.y + chip_h + margin * 0.6 %}
+  {%- endif %}
+
+  {#- callouts row: best day / worst day -#}
+  {%- set n_callouts = view.callouts | length -%}
+  {%- if n_callouts > 0 %}
+  {%- set co_gap = margin * 0.4 -%}
+  {%- set co_w = (safe_w - co_gap * (n_callouts - 1)) / n_callouts -%}
+  {%- for co in view.callouts %}
+  {%- set cx = margin + loop.index0 * (co_w + co_gap) %}
+  <text x="{{ cx }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ callout_label_size }}" fill="{{ pal.muted }}">{{ co.label }}</text>
+  <text x="{{ cx }}" y="{{ ns.y + callout_value_size + 4 }}" font-family="{{ mono }}"
+        font-weight="700" font-size="{{ callout_value_size }}" fill="{{ pal.fg }}">{{ co.value }}</text>
+  {%- endfor %}
+  {%- set ns.y = ns.y + callout_value_size + 4 + margin * 0.55 %}
+  {%- endif %}
+
+  {#- reflection panel: bottom half -#}
+  {%- if view.reflection %}
+  {%- set panel_x = margin %}
+  {%- set panel_y = ns.y + margin * 0.25 %}
+  {%- set panel_w = safe_w %}
+  {%- set panel_bottom = H - margin * 1.35 %}
+  {%- set panel_h = panel_bottom - panel_y %}
+  {%- set panel_radius = margin * 0.45 %}
+  {%- set rule_w = margin * 0.16 %}
+  {%- set panel_pad = margin * 0.62 %}
+  {%- set quote_size = [panel_h * 0.55, W * 0.13] | min %}
+  {%- set text_x = panel_x + rule_w + panel_pad %}
+  {%- set line_h = reflection_size * 1.32 %}
+
+  <rect x="{{ panel_x }}" y="{{ panel_y }}" width="{{ panel_w }}" height="{{ panel_h }}"
+        rx="{{ panel_radius }}" fill="{{ pal.surface }}"/>
+  <rect x="{{ panel_x }}" y="{{ panel_y }}" width="{{ rule_w }}" height="{{ panel_h }}"
+        rx="{{ rule_w / 2 }}" fill="{{ pal.accent }}"/>
+
+  <text x="{{ text_x }}" y="{{ panel_y + quote_size * 0.72 }}"
+        font-family="{{ sans }}" font-weight="800" font-size="{{ quote_size }}"
+        fill="{{ pal.accent }}" opacity="0.22">&#8220;</text>
+
+  {%- set wrap = namespace(lines = []) %}
+  {%- set _dummy = wrap_text(wrap, view.reflection, wrap_width, max_lines) %}
+  {%- set text_y = panel_y + panel_pad + reflection_size %}
+  <text x="{{ text_x }}" y="{{ text_y }}"
+        font-family="{{ sans }}" font-weight="500" font-size="{{ reflection_size }}"
+        fill="{{ pal.fg }}">
+  {%- for line in wrap.lines %}
+    <tspan x="{{ text_x }}" dy="{{ 0 if loop.first else line_h }}">{{ line }}</tspan>
+  {%- endfor %}
+  </text>
+  {%- endif %}
+
+{%- else %}
+{#- ============================== TELEGRAM (landscape, stacked) ============================== -#}
+  {%- set headline_size = [W * 0.028, 20] | max -%}
+  {%- set subhead_size = [W * 0.016, 12] | max -%}
+  {%- set hero_label_size = [W * 0.015, 11] | max -%}
+  {%- set hero_value_size = H * 0.100 -%}
+  {%- set chip_h = [H * 0.080, 34] | max -%}
+  {%- set chip_label_size = [W * 0.0115, 9] | max -%}
+  {%- set chip_value_size = [W * 0.0155, 12] | max -%}
+  {%- set callout_value_size = [W * 0.0135, 11] | max -%}
+  {%- set callout_label_size = [W * 0.0105, 8] | max -%}
+  {%- set reflection_size = [W * 0.0125, 10] | max -%}
+  {%- set wrap_width = 60 -%}
+  {%- set max_lines = 5 -%}
+
+  {%- set ns = namespace(y = margin + logo_size + margin * 0.65) -%}
+
+  {%- set headline_x = margin -%}
+  {%- if view.emoji -%}
+    {%- set emoji_w = headline_size * 1.15 -%}
+    {%- set headline_x = margin + emoji_w -%}
+  {%- endif %}
+  {%- set ns.y = ns.y + headline_size %}
+  {%- if view.emoji %}
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ sans }}" font-size="{{ headline_size }}"
+        fill="{{ pal.fg }}">{{ view.emoji }}</text>
+  {%- endif %}
+  <text x="{{ headline_x }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="800"
+        font-size="{{ headline_size }}" fill="{{ pal.fg }}">{{ view.headline }}</text>
+
+  {%- if view.subhead %}
+  {%- set ns.y = ns.y + subhead_size + margin * 0.22 %}
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ subhead_size }}" fill="{{ pal.muted }}">{{ view.subhead }}</text>
+  {%- endif %}
+
+  {#- hero + chips + callouts share one row: hero left, chips/callouts right -#}
+  {%- set hero_y = ns.y + margin * 0.32 + hero_value_size * 0.62 %}
+  <text x="{{ margin }}" y="{{ hero_y - hero_value_size * 0.62 }}"
+        font-family="{{ sans }}" font-weight="600" font-size="{{ hero_label_size }}"
+        fill="{{ pal.muted }}">{{ view.hero.label }}</text>
+  <text x="{{ margin }}" y="{{ hero_y }}"
+        font-family="{{ mono }}" font-weight="700" font-size="{{ hero_value_size }}"
+        fill="{{ hero_fill() }}"><tspan font-size="{{ hero_value_size * 0.46 }}">{{ arrow_glyph(view.hero.direction) }} </tspan>{{ view.hero.value }}</text>
+
+  {%- set hero_col_w = W * 0.30 %}
+  {%- set right_x = margin + hero_col_w + margin * 0.5 %}
+  {%- set right_w = safe_w - hero_col_w - margin * 0.5 %}
+
+  {#- chips: two stacked pills to the right of hero -#}
+  {%- set n_chips = view.delta_chips | length -%}
+  {%- if n_chips > 0 %}
+  {%- set chip_gap = margin * 0.28 -%}
+  {%- set chip_w = (right_w - chip_gap * (n_chips - 1)) / n_chips -%}
+  {%- set chip_y = ns.y %}
+  {%- for chip in view.delta_chips %}
+  {%- set cx = right_x + loop.index0 * (chip_w + chip_gap) %}
+  <rect x="{{ cx }}" y="{{ chip_y }}" width="{{ chip_w }}" height="{{ chip_h }}"
+        rx="{{ chip_h / 2 }}" fill="{{ pal.chip_bg }}"/>
+  <text x="{{ cx + chip_w * 0.5 }}" y="{{ chip_y + chip_h * 0.40 }}" text-anchor="middle"
+        font-family="{{ sans }}" font-weight="400" font-size="{{ chip_label_size }}"
+        fill="{{ pal.muted }}">{{ chip.label }}</text>
+  <text x="{{ cx + chip_w * 0.5 }}" y="{{ chip_y + chip_h * 0.76 }}" text-anchor="middle"
+        font-family="{{ mono }}" font-weight="700" font-size="{{ chip_value_size }}"
+        fill="{{ dir_color(chip.direction) }}">{{ arrow_glyph(chip.direction) }} {{ chip.value }}</text>
+  {%- endfor %}
+  {%- set co_row_y = chip_y + chip_h + margin * 0.3 %}
+  {%- else %}
+  {%- set co_row_y = ns.y %}
+  {%- endif %}
+
+  {#- callouts: to the right of hero, below the chips -#}
+  {%- set n_callouts = view.callouts | length -%}
+  {%- if n_callouts > 0 %}
+  {%- set co_gap = margin * 0.4 -%}
+  {%- set co_w = (right_w - co_gap * (n_callouts - 1)) / n_callouts -%}
+  {%- for co in view.callouts %}
+  {%- set cx = right_x + loop.index0 * (co_w + co_gap) %}
+  <text x="{{ cx }}" y="{{ co_row_y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ callout_label_size }}" fill="{{ pal.muted }}">{{ co.label }}</text>
+  <text x="{{ cx }}" y="{{ co_row_y + callout_value_size + 3 }}" font-family="{{ mono }}"
+        font-weight="700" font-size="{{ callout_value_size }}" fill="{{ pal.fg }}">{{ co.value }}</text>
+  {%- endfor %}
+  {%- endif %}
+
+  {%- set ns.y = [hero_y + hero_value_size * 0.30, co_row_y + callout_value_size + 3] | max + margin * 0.35 %}
+
+  {#- reflection panel: bottom band spanning the full width -#}
+  {%- if view.reflection %}
+  {%- set panel_x = margin %}
+  {%- set panel_y = ns.y %}
+  {%- set panel_w = safe_w %}
+  {%- set panel_bottom = H - margin * 1.1 %}
+  {%- set panel_h = panel_bottom - panel_y %}
+  {%- set panel_radius = margin * 0.32 %}
+  {%- set rule_w = margin * 0.12 %}
+  {%- set panel_pad = margin * 0.3 %}
+  {%- set quote_size = [panel_h * 0.6, W * 0.045] | min %}
+  {%- set text_x = panel_x + rule_w + panel_pad + quote_size * 0.55 %}
+  {%- set line_h = reflection_size * 1.22 %}
+
+  <rect x="{{ panel_x }}" y="{{ panel_y }}" width="{{ panel_w }}" height="{{ panel_h }}"
+        rx="{{ panel_radius }}" fill="{{ pal.surface }}"/>
+  <rect x="{{ panel_x }}" y="{{ panel_y }}" width="{{ rule_w }}" height="{{ panel_h }}"
+        rx="{{ rule_w / 2 }}" fill="{{ pal.accent }}"/>
+
+  <text x="{{ panel_x + rule_w + panel_pad * 0.5 }}" y="{{ panel_y + quote_size * 0.78 }}"
+        font-family="{{ sans }}" font-weight="800" font-size="{{ quote_size }}"
+        fill="{{ pal.accent }}" opacity="0.22">&#8220;</text>
+
+  {%- set wrap = namespace(lines = []) %}
+  {%- set _dummy = wrap_text(wrap, view.reflection, wrap_width, max_lines) %}
+  {%- set text_y = panel_y + panel_pad + reflection_size * 1.15 %}
+  <text x="{{ text_x }}" y="{{ text_y }}"
+        font-family="{{ sans }}" font-weight="500" font-size="{{ reflection_size }}"
+        fill="{{ pal.fg }}">
+  {%- for line in wrap.lines %}
+    <tspan x="{{ text_x }}" dy="{{ 0 if loop.first else line_h }}">{{ line }}</tspan>
+  {%- endfor %}
+  </text>
+  {%- endif %}
+{%- endif %}
+
+  <!-- footer + watermark -->
+  <text x="{{ margin }}" y="{{ H - margin * 0.55 }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ footer_size }}" fill="{{ pal.muted }}">{{ view.footer }}</text>
+  {%- if brand.watermark %}
+  <text x="{{ W - margin }}" y="{{ H - margin * 0.55 }}" text-anchor="end"
+        font-family="{{ sans }}" font-weight="700" font-size="{{ footer_size }}"
+        fill="{{ pal.muted }}" opacity="0.6">{{ brand.logo_text }}</text>
+  {%- endif %}
+</svg>
