@@ -1,0 +1,277 @@
+{#-
+  milestone — celebration card for one-off streaks/records.
+  Consumes the render context defined in docs/rendering-contract.md:
+  W, H, size ("feed" | "telegram"), spec, brand {fonts, logo_text, watermark,
+  palette}, view {headline, subhead, emoji, hero, delta_chips, callouts,
+  sparkline, as_of, footer}.
+
+  No formatting logic here — every numeral in `view` already arrives fully
+  formatted by the renderer. This template only lays things out.
+
+  Design: the hero metric (streak_count or record_value, director's choice
+  via spec.hero_metric_key) gets a dramatic radiating burst built from the
+  palette's grad_from/grad_to — this is the celebration archetype, so it
+  may read louder than daily_pnl. The hero's own color always follows
+  view.hero.color_role (positive/negative/neutral): a milestone can be a
+  negative record told with a cautionary tone, and this template never
+  hardcodes a "celebration" color to override that.
+
+  `view.text_fields` (e.g. a director/host-authored label) does not exist
+  in the render context yet — it may be added later by a sibling worker.
+  Any use of it below is guarded with `is defined` (StrictUndefined-safe)
+  and degrades to nothing when absent.
+-#}
+{%- set pal = brand.palette -%}
+{%- set sans = brand.fonts.sans -%}
+{%- set mono = brand.fonts.mono -%}
+
+{%- macro arrow_glyph(d) -%}
+{%- if d == 'up' -%}▲{%- elif d == 'down' -%}▼{%- else -%}●{%- endif -%}
+{%- endmacro -%}
+
+{%- macro dir_color(d) -%}
+{%- if d == 'up' -%}{{ pal.positive }}{%- elif d == 'down' -%}{{ pal.negative }}{%- else -%}{{ pal.muted }}{%- endif -%}
+{%- endmacro -%}
+
+{%- macro hero_fill() -%}
+{%- if view.hero.color_role == 'positive' -%}{{ pal.positive }}{%- elif view.hero.color_role == 'negative' -%}{{ pal.negative }}{%- else -%}{{ pal.fg }}{%- endif -%}
+{%- endmacro -%}
+
+{#- 12 unit vectors (30-degree steps) for the sunburst rays. Hardcoded
+    sin/cos values, not computed — Jinja has no trig functions and the
+    renderer must stay a pure function of its inputs (no math-module call
+    that could differ across platforms). -#}
+{%- set RAY_VECTORS = [
+  [1.0, 0.0], [0.866, 0.5], [0.5, 0.866], [0.0, 1.0],
+  [-0.5, 0.866], [-0.866, 0.5], [-1.0, 0.0], [-0.866, -0.5],
+  [-0.5, -0.866], [0.0, -1.0], [0.5, -0.866], [0.866, -0.5]
+] -%}
+
+{#- Radiating rings + sunburst behind the hero number. Built entirely from
+    grad_from/grad_to (brand accent gradient) regardless of tone — the
+    burst is the template's celebratory house style, while the hero digits
+    themselves still carry the true color_role (see hero_fill()). -#}
+{%- macro hero_burst(cx, cy, r_outer, rays) -%}
+  <circle cx="{{ cx }}" cy="{{ cy }}" r="{{ r_outer * 0.66 }}" fill="url(#heroGlow)"/>
+  {%- for v in rays %}
+  {%- set r_in = r_outer * 0.44 -%}
+  {%- set r_len = r_outer * (1.0 if loop.index0 % 2 == 0 else 0.76) -%}
+  <line x1="{{ cx + v[0] * r_in }}" y1="{{ cy + v[1] * r_in }}"
+        x2="{{ cx + v[0] * r_len }}" y2="{{ cy + v[1] * r_len }}"
+        stroke="url(#accentGrad)" stroke-width="{{ r_outer * (0.028 if loop.index0 % 2 == 0 else 0.018) }}"
+        stroke-linecap="round" opacity="0.55"/>
+  {%- endfor %}
+  <circle cx="{{ cx }}" cy="{{ cy }}" r="{{ r_outer * 0.60 }}" fill="none"
+          stroke="url(#accentGrad)" stroke-width="{{ r_outer * 0.018 }}" opacity="0.30"/>
+  <circle cx="{{ cx }}" cy="{{ cy }}" r="{{ r_outer * 0.78 }}" fill="none"
+          stroke="url(#accentGrad)" stroke-width="{{ r_outer * 0.014 }}" opacity="0.20"/>
+  <circle cx="{{ cx }}" cy="{{ cy }}" r="{{ r_outer * 0.96 }}" fill="none"
+          stroke="url(#accentGrad)" stroke-width="{{ r_outer * 0.010 }}" opacity="0.12"/>
+{%- endmacro -%}
+
+{%- set margin = W * 0.065 -%}
+{%- set safe_w = W - margin * 2 -%}
+{%- set logo_size = [W * 0.020, 16] | max -%}
+{%- set meta_size = [W * 0.0145, 12] | max -%}
+{%- set footer_size = [W * 0.013, 11] | max -%}
+{%- set header_baseline = margin + logo_size -%}
+
+<svg width="{{ W }}" height="{{ H }}" viewBox="0 0 {{ W }} {{ H }}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="{{ pal.grad_from }}"/>
+      <stop offset="100%" stop-color="{{ pal.grad_to }}"/>
+    </linearGradient>
+    <radialGradient id="heroGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="{{ pal.grad_from }}" stop-opacity="0.30"/>
+      <stop offset="55%" stop-color="{{ pal.grad_to }}" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="{{ pal.grad_to }}" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect x="0" y="0" width="{{ W }}" height="{{ H }}" fill="{{ pal.bg }}"/>
+
+  <!-- brand mark: small gradient accent bar beside the logo text -->
+  <rect x="{{ margin }}" y="{{ header_baseline - logo_size * 0.78 }}"
+        width="{{ logo_size * 0.34 }}" height="{{ logo_size * 0.78 }}"
+        rx="{{ logo_size * 0.12 }}" fill="url(#accentGrad)"/>
+  <text x="{{ margin + logo_size * 0.55 }}" y="{{ header_baseline }}"
+        font-family="{{ sans }}" font-weight="700" font-size="{{ logo_size }}"
+        fill="{{ pal.fg }}">{{ brand.logo_text }}</text>
+
+  {%- if view.as_of %}
+  <text x="{{ W - margin }}" y="{{ header_baseline }}" text-anchor="end"
+        font-family="{{ sans }}" font-weight="400" font-size="{{ meta_size }}"
+        fill="{{ pal.muted }}">{{ view.as_of }}</text>
+  {%- endif %}
+
+{%- if size == 'feed' %}
+{#- ============================== FEED (portrait, centered hero) ============================== -#}
+  {%- set headline_size = [W * 0.052, 30] | max -%}
+  {%- set subhead_size = [W * 0.024, 16] | max -%}
+  {%- set kicker_size = [W * 0.016, 12] | max -%}
+  {%- set hero_label_size = [W * 0.020, 14] | max -%}
+  {%- set hero_value_size = W * 0.22 -%}
+  {%- set chip_h = [H * 0.058, 54] | max -%}
+  {%- set chip_label_size = [W * 0.0145, 11] | max -%}
+  {%- set chip_value_size = [W * 0.021, 15] | max -%}
+
+  {%- set ns = namespace(y = margin + logo_size + margin * 1.0) -%}
+
+  {%- if view.text_fields is defined and view.text_fields.label is defined and view.text_fields.label %}
+  {%- set ns.y = ns.y + kicker_size %}
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="700"
+        font-size="{{ kicker_size }}" fill="{{ pal.accent }}">{{ view.text_fields.label }}</text>
+  {%- set ns.y = ns.y + margin * 0.35 %}
+  {%- endif %}
+
+  {%- set ns.y = ns.y + headline_size %}
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="800"
+        font-size="{{ headline_size }}" fill="{{ pal.fg }}">{{ view.headline }}</text>
+
+  {%- if view.subhead %}
+  {%- set ns.y = ns.y + subhead_size + margin * 0.35 %}
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ subhead_size }}" fill="{{ pal.muted }}">{{ view.subhead }}</text>
+  {%- endif %}
+
+  {#- hero burst, centered lower in the remaining space -#}
+  {%- set hero_y = H * 0.51 %}
+  {%- set r_outer = W * 0.315 %}
+  {{ hero_burst(W / 2, hero_y, r_outer, RAY_VECTORS) }}
+
+  <text x="{{ W / 2 }}" y="{{ hero_y - hero_value_size * 0.70 }}" text-anchor="middle"
+        font-family="{{ sans }}" font-weight="600" font-size="{{ hero_label_size }}"
+        fill="{{ pal.muted }}">{{ view.hero.label }}</text>
+  <text x="{{ W / 2 }}" y="{{ hero_y + hero_value_size * 0.30 }}" text-anchor="middle"
+        font-family="{{ mono }}" font-weight="800" font-size="{{ hero_value_size }}"
+        fill="{{ hero_fill() }}">{{ view.hero.value }}</text>
+
+  {%- set ns.y = hero_y + r_outer + margin * 0.9 %}
+
+  {#- delta chip(s): previous best, when the director picked it via emphasis_keys -#}
+  {%- set n_chips = view.delta_chips | length -%}
+  {%- if n_chips > 0 %}
+  {%- set chip_gap = margin * 0.4 -%}
+  {%- set chip_w = (safe_w - chip_gap * (n_chips - 1)) / n_chips -%}
+  {%- for chip in view.delta_chips %}
+  {%- set cx = margin + loop.index0 * (chip_w + chip_gap) %}
+  <rect x="{{ cx }}" y="{{ ns.y }}" width="{{ chip_w }}" height="{{ chip_h }}"
+        rx="{{ chip_h / 2 }}" fill="{{ pal.chip_bg }}"/>
+  <text x="{{ cx + chip_w * 0.5 }}" y="{{ ns.y + chip_h * 0.40 }}" text-anchor="middle"
+        font-family="{{ sans }}" font-weight="400" font-size="{{ chip_label_size }}"
+        fill="{{ pal.muted }}">{{ chip.label }}</text>
+  <text x="{{ cx + chip_w * 0.5 }}" y="{{ ns.y + chip_h * 0.76 }}" text-anchor="middle"
+        font-family="{{ mono }}" font-weight="700" font-size="{{ chip_value_size }}"
+        fill="{{ dir_color(chip.direction) }}">{{ arrow_glyph(chip.direction) }} {{ chip.value }}</text>
+  {%- endfor %}
+  {%- set ns.y = ns.y + chip_h + margin * 0.7 %}
+  {%- endif %}
+
+  {#- callouts row (if the director attached any) -#}
+  {%- set n_callouts = view.callouts | length -%}
+  {%- if n_callouts > 0 %}
+  {%- set co_gap = margin * 0.4 -%}
+  {%- set co_w = (safe_w - co_gap * (n_callouts - 1)) / n_callouts -%}
+  {%- set callout_value_size = [W * 0.018, 13] | max -%}
+  {%- set callout_label_size = [W * 0.0135, 10] | max -%}
+  {%- for co in view.callouts %}
+  {%- set cx = margin + loop.index0 * (co_w + co_gap) %}
+  <text x="{{ cx }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ callout_label_size }}" fill="{{ pal.muted }}">{{ co.label }}</text>
+  <text x="{{ cx }}" y="{{ ns.y + callout_value_size + 4 }}" font-family="{{ mono }}"
+        font-weight="700" font-size="{{ callout_value_size }}" fill="{{ pal.fg }}">{{ co.value }}</text>
+  {%- endfor %}
+  {%- endif %}
+
+{%- else %}
+{#- ============================== TELEGRAM (landscape, two-column) ============================== -#}
+  {%- set col_split = W * 0.46 -%}
+  {%- set left_x = margin -%}
+  {%- set left_w = col_split - margin -%}
+  {%- set right_x = col_split + margin * 0.5 -%}
+  {%- set right_w = W - right_x - margin -%}
+
+  {%- set headline_size = [W * 0.036, 24] | max -%}
+  {%- set subhead_size = [W * 0.019, 14] | max -%}
+  {%- set kicker_size = [W * 0.014, 11] | max -%}
+  {%- set hero_label_size = [W * 0.017, 13] | max -%}
+  {%- set hero_value_size = H * 0.19 -%}
+  {%- set chip_h = [H * 0.12, 40] | max -%}
+  {%- set chip_label_size = [W * 0.0125, 10] | max -%}
+  {%- set chip_value_size = [W * 0.017, 13] | max -%}
+
+  {%- set lns = namespace(y = margin + logo_size + margin * 1.1) -%}
+
+  {%- if view.text_fields is defined and view.text_fields.label is defined and view.text_fields.label %}
+  {%- set lns.y = lns.y + kicker_size %}
+  <text x="{{ left_x }}" y="{{ lns.y }}" font-family="{{ sans }}" font-weight="700"
+        font-size="{{ kicker_size }}" fill="{{ pal.accent }}">{{ view.text_fields.label }}</text>
+  {%- set lns.y = lns.y + margin * 0.3 %}
+  {%- endif %}
+
+  {%- set lns.y = lns.y + headline_size %}
+  <text x="{{ left_x }}" y="{{ lns.y }}" font-family="{{ sans }}" font-weight="800"
+        font-size="{{ headline_size }}" fill="{{ pal.fg }}">{{ view.headline }}</text>
+
+  {%- if view.subhead %}
+  {%- set lns.y = lns.y + subhead_size + margin * 0.3 %}
+  <text x="{{ left_x }}" y="{{ lns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ subhead_size }}" fill="{{ pal.muted }}">{{ view.subhead }}</text>
+  {%- endif %}
+
+  {#- delta chip(s) stacked in the left column, under the copy -#}
+  {%- set n_chips = view.delta_chips | length -%}
+  {%- if n_chips > 0 %}
+  {%- set lns.y = lns.y + margin * 0.6 %}
+  {%- set chip_gap = margin * 0.32 -%}
+  {%- for chip in view.delta_chips %}
+  <rect x="{{ left_x }}" y="{{ lns.y }}" width="{{ left_w }}" height="{{ chip_h }}"
+        rx="{{ chip_h / 2 }}" fill="{{ pal.chip_bg }}"/>
+  <text x="{{ left_x + left_w * 0.5 }}" y="{{ lns.y + chip_h * 0.40 }}" text-anchor="middle"
+        font-family="{{ sans }}" font-weight="400" font-size="{{ chip_label_size }}"
+        fill="{{ pal.muted }}">{{ chip.label }}</text>
+  <text x="{{ left_x + left_w * 0.5 }}" y="{{ lns.y + chip_h * 0.78 }}" text-anchor="middle"
+        font-family="{{ mono }}" font-weight="700" font-size="{{ chip_value_size }}"
+        fill="{{ dir_color(chip.direction) }}">{{ arrow_glyph(chip.direction) }} {{ chip.value }}</text>
+  {%- set lns.y = lns.y + chip_h + chip_gap %}
+  {%- endfor %}
+  {%- endif %}
+
+  {#- callouts: stacked label/value rows under the chips -#}
+  {%- if view.callouts | length > 0 %}
+  {%- set lns.y = lns.y + margin * 0.3 %}
+  {%- set callout_value_size = [W * 0.015, 12] | max -%}
+  {%- set callout_label_size = [W * 0.0115, 9] | max -%}
+  {%- for co in view.callouts %}
+  <text x="{{ left_x }}" y="{{ lns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ callout_label_size }}" fill="{{ pal.muted }}">{{ co.label }}</text>
+  <text x="{{ left_x + left_w }}" y="{{ lns.y }}" text-anchor="end" font-family="{{ mono }}"
+        font-weight="700" font-size="{{ callout_value_size }}" fill="{{ pal.fg }}">{{ co.value }}</text>
+  {%- set lns.y = lns.y + callout_value_size + margin * 0.28 %}
+  {%- endfor %}
+  {%- endif %}
+
+  {#- hero burst, centered in the right column -#}
+  {%- set hero_cx = right_x + right_w / 2 %}
+  {%- set hero_y = H * 0.54 %}
+  {%- set r_outer = [right_w * 0.46, H * 0.34] | min %}
+  {{ hero_burst(hero_cx, hero_y, r_outer, RAY_VECTORS) }}
+
+  <text x="{{ hero_cx }}" y="{{ hero_y - hero_value_size * 0.80 }}" text-anchor="middle"
+        font-family="{{ sans }}" font-weight="600" font-size="{{ hero_label_size }}"
+        fill="{{ pal.muted }}">{{ view.hero.label }}</text>
+  <text x="{{ hero_cx }}" y="{{ hero_y + hero_value_size * 0.30 }}" text-anchor="middle"
+        font-family="{{ mono }}" font-weight="800" font-size="{{ hero_value_size }}"
+        fill="{{ hero_fill() }}">{{ view.hero.value }}</text>
+{%- endif %}
+
+  <!-- footer + watermark -->
+  <text x="{{ margin }}" y="{{ H - margin * 0.55 }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ footer_size }}" fill="{{ pal.muted }}">{{ view.footer }}</text>
+  {%- if brand.watermark %}
+  <text x="{{ W - margin }}" y="{{ H - margin * 0.55 }}" text-anchor="end"
+        font-family="{{ sans }}" font-weight="700" font-size="{{ footer_size }}"
+        fill="{{ pal.muted }}" opacity="0.6">{{ brand.logo_text }}</text>
+  {%- endif %}
+</svg>

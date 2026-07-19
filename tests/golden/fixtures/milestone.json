@@ -1,0 +1,23 @@
+{
+  "facts": {
+    "event_type": "milestone",
+    "milestone_kind": "win_streak",
+    "streak_count": 9,
+    "record_value": null,
+    "record_unit": "days",
+    "previous_best": 6.0,
+    "as_of": "2026-07-18T16:00:00+00:00"
+  },
+  "spec": {
+    "template_id": "milestone",
+    "template_version": "1.0.0",
+    "tone": "celebratory",
+    "palette_id": "midnight",
+    "hero_metric_key": "streak_count",
+    "emphasis_keys": ["previous_best"],
+    "callout_keys": [],
+    "headline": "Longest green streak yet",
+    "subhead": "Outlasting every previous run this season",
+    "sparkline": false
+  }
+}
