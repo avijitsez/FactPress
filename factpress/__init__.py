@@ -17,9 +17,12 @@ from typing import Any
 
 import httpx
 
+import threading
+
 from factpress import pipeline
 from factpress.director import Director, DirectorConfig, fallback_spec
 from factpress.interactive.api import DecisionResult, InteractiveManager
+from factpress.interactive.poller import Poller
 from factpress.interactive.store import PendingApproval, PendingStore
 from factpress.publisher import MessageRef, PublishError, Publisher, PublisherConfig
 from factpress.schemas import (
@@ -50,6 +53,7 @@ __all__ = [
     "DecisionResult",
     "PendingApproval",
     "PendingStore",
+    "Poller",
     "__version__",
 ]
 
@@ -95,6 +99,10 @@ class FactPress:
                 base_url=llm_base_url, model=llm_model, api_key=llm_api_key
             )
             self._director = Director(director_config, transport=_director_transport)
+
+        # Kept (not just consumed) so run_poller() can build its Poller over
+        # the same transport seam the Publisher itself uses (F5.7).
+        self._publisher_transport = _publisher_transport
 
         self._publisher: Publisher | None = None
         if telegram_token:
@@ -241,3 +249,31 @@ class FactPress:
         """Startup sweep for restart-orphaned cards. See
         :meth:`InteractiveManager.resume_after_restart`."""
         return self._get_interactive().resume_after_restart(now=now)
+
+    def run_poller(
+        self,
+        *,
+        stop_event: threading.Event | None = None,
+        poll_timeout_s: int = 25,
+        expiry_sweep_every_s: float = 15.0,
+    ) -> None:
+        """Blocking standalone long-poll loop (F5.7): the ``ff.run_poller()``
+        half of §7's "Integration surface" for hosts with no dispatcher of
+        their own (use :meth:`handle_callback` instead if you already run
+        one). Builds a :class:`~factpress.interactive.poller.Poller` from
+        this facade's own publisher config + manager -- see
+        :meth:`factpress.interactive.poller.Poller.run`.
+        """
+        if self._publisher is None:
+            raise RuntimeError(
+                "FactPress.run_poller() requires a telegram_token; construct "
+                "FactPress(telegram_token=..., ...)."
+            )
+        poller = Poller(
+            self._get_interactive(),
+            self._publisher.config,
+            transport=self._publisher_transport,
+            poll_timeout_s=poll_timeout_s,
+            expiry_sweep_every_s=expiry_sweep_every_s,
+        )
+        poller.run(stop_event=stop_event)
