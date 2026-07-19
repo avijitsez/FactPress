@@ -24,6 +24,8 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from factpress.resources import builtin_root
+
 _HEX_COLOR_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 
 _PALETTE_COLOR_FIELDS = (
@@ -101,14 +103,13 @@ class BrandKit(BaseModel):
 
 
 def _builtin_default_path() -> Path:
-    """Return the repo's ``brandkits/default.yaml`` path.
+    """Return the built-in ``brandkits/default.yaml`` path.
 
-    Resolved relative to this package (``factpress/../brandkits``), mirroring
-    ``factpress.catalog.builtin_templates_dir``: correct for a source
-    checkout / editable install. Packaged (wheel) install resolution is a
-    later phase.
+    Resolves via :func:`factpress.resources.builtin_root`: the repo-checkout
+    ``brandkits/`` directory in a source checkout / editable install, or the
+    packaged copy under ``factpress/_builtin/brandkits`` in a wheel install.
     """
-    return Path(__file__).resolve().parent.parent / "brandkits" / "default.yaml"
+    return builtin_root("brandkits") / "default.yaml"
 
 
 def _format_validation_error(exc: ValidationError) -> str:

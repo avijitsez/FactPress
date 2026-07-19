@@ -21,12 +21,9 @@ from pydantic import ValidationError
 
 from factpress.director import fallback_spec
 from factpress.renderer.engine_svg import load_brandkit, load_manifest, render_png
-from factpress.schemas import DailyPnlFacts, FactPayload
+from factpress.resources import builtin_root
+from factpress.schemas import EVENT_MODELS, FactPayload
 
-# factpress/cli.py -> parent is the `factpress` package dir, parent.parent is
-# the repo root. This resolves templates/brandkits for an in-repo checkout;
-# resolving them for a packaged (pip-installed) distribution is a later phase.
-_PACKAGE_PARENT = Path(__file__).resolve().parent.parent
 
 class _CliError(Exception):
     """A user-facing CLI error: caught in `main`, printed, exit code 2."""
@@ -54,19 +51,18 @@ def _load_facts(path: Path) -> FactPayload:
         raise _CliError(f"facts file {path} is missing required key 'event_type'")
 
     try:
-        if event_type == "daily_pnl":
-            return DailyPnlFacts.model_validate(data)
-        return FactPayload.model_validate(data)
+        model = EVENT_MODELS.get(event_type, FactPayload)
+        return model.model_validate(data)
     except ValidationError as exc:
         raise _CliError(f"facts file {path} failed validation:\n{exc}") from exc
 
 
 def _default_template_dir(event_type: str) -> Path:
-    return _PACKAGE_PARENT / "templates" / event_type
+    return builtin_root("templates") / event_type
 
 
 def _default_brandkit_path() -> Path:
-    return _PACKAGE_PARENT / "brandkits" / "default.yaml"
+    return builtin_root("brandkits") / "default.yaml"
 
 
 def _open_preview(path: Path) -> None:
@@ -144,16 +140,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--template-dir",
         default=None,
         help=(
-            "Template directory (default: templates/<event_type> resolved relative to the "
-            "package parent; packaged-install resolution is a later phase)."
+            "Template directory (default: the built-in templates/<event_type>, resolved via "
+            "factpress.resources.builtin_root -- works in both a source checkout and a "
+            "packaged install)."
         ),
     )
     render_parser.add_argument(
         "--brandkit",
         default=None,
         help=(
-            "Brandkit YAML path (default: brandkits/default.yaml resolved relative to the "
-            "package parent; packaged-install resolution is a later phase)."
+            "Brandkit YAML path (default: the built-in brandkits/default.yaml, resolved via "
+            "factpress.resources.builtin_root -- works in both a source checkout and a "
+            "packaged install)."
         ),
     )
     render_parser.add_argument("--size", choices=["feed", "telegram"], default="feed")

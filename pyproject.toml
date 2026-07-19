@@ -19,7 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 html = ["playwright>=1.40"]
-dev = ["pytest>=8", "ruff>=0.4"]
+dev = ["pytest>=8", "ruff>=0.4", "build>=1.2", "twine>=5"]
 
 [project.scripts]
 factpress = "factpress.cli:main"
@@ -33,3 +33,19 @@ testpaths = ["tests"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["factpress"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"templates" = "factpress/_builtin/templates"
+"brandkits" = "factpress/_builtin/brandkits"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "factpress/**",
+    "templates/**",
+    "brandkits/**",
+    "tests/**",
+    "pyproject.toml",
+    "README.md",
+    "LICENSE",
+    "FACTPRESS_DESIGN.md",
+]

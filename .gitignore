@@ -5,6 +5,7 @@ __pycache__/
 .ruff_cache/
 dist/
 build/
+factpress/_builtin/
 *.egg-info/
 .foreman/
 out/

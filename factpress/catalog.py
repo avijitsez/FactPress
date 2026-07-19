@@ -19,17 +19,17 @@ from pathlib import Path
 from typing import Any
 
 from factpress.renderer.engine_svg import load_manifest
+from factpress.resources import builtin_root
 
 
 def builtin_templates_dir() -> Path:
-    """Return the repo's ``templates/`` directory.
+    """Return the built-in ``templates/`` directory.
 
-    Resolved relative to this package (``factpress/../templates``), which is
-    correct for a source checkout / editable install. Locating built-in
-    templates for a packaged (wheel) install is out of scope here — that is
-    F3's concern.
+    Resolves via :func:`factpress.resources.builtin_root`: the repo-checkout
+    ``templates/`` directory in a source checkout / editable install, or the
+    packaged copy under ``factpress/_builtin/templates`` in a wheel install.
     """
-    return Path(__file__).resolve().parent.parent / "templates"
+    return builtin_root("templates")
 
 
 def discover_templates(template_paths: Sequence[Path]) -> dict[str, Path]:

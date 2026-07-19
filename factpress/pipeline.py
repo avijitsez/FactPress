@@ -22,27 +22,12 @@ from factpress.catalog import builtin_templates_dir, catalog_entry, discover_tem
 from factpress.director import Director, fallback_spec
 from factpress.publisher import MessageRef, Publisher
 from factpress.renderer.engine_svg import load_brandkit, render_png
-from factpress.schemas import (
-    DailyPnlFacts,
-    DesignSpec,
-    DigestTopPicksFacts,
-    FactPayload,
-    MilestoneFacts,
-    PulseUpdateFacts,
-    ReflectionRecapFacts,
-    SessionDigestFacts,
-    TradeExecutedFacts,
-)
+from factpress.resources import builtin_root
+from factpress.schemas import EVENT_MODELS, DesignSpec, FactPayload
 
-_EVENT_MODELS: dict[str, type[FactPayload]] = {
-    "daily_pnl": DailyPnlFacts,
-    "trade_executed": TradeExecutedFacts,
-    "pulse_update": PulseUpdateFacts,
-    "session_digest": SessionDigestFacts,
-    "digest_top_picks": DigestTopPicksFacts,
-    "milestone": MilestoneFacts,
-    "reflection_recap": ReflectionRecapFacts,
-}
+# Alias kept for existing importers (golden harness); the registry itself
+# lives in schemas.EVENT_MODELS.
+_EVENT_MODELS = EVENT_MODELS
 
 
 def _coerce_facts(facts: FactPayload | dict[str, Any], event_type: str) -> FactPayload:
@@ -108,7 +93,7 @@ def direct_spec(
     entry = catalog_entry(template_dir)
 
     if brandkit is None:
-        brandkit = builtin_templates_dir().parent / "brandkits" / "default.yaml"
+        brandkit = builtin_root("brandkits") / "default.yaml"
     kit = brandkit if isinstance(brandkit, dict) else load_brandkit(Path(brandkit))
 
     if director is not None:
