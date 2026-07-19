@@ -21,8 +21,9 @@ from pathlib import Path
 
 import pytest
 
+from factpress.pipeline import _EVENT_MODELS
 from factpress.renderer.engine_svg import load_brandkit, render_png
-from factpress.schemas import DailyPnlFacts, DesignSpec, FactPayload, TradeExecutedFacts
+from factpress.schemas import DesignSpec, FactPayload
 
 _GOLDEN_DIR = Path(__file__).resolve().parent
 _FIXTURES_DIR = _GOLDEN_DIR / "fixtures"
@@ -33,10 +34,9 @@ _BRANDKIT_PATH = _REPO_ROOT / "brandkits" / "default.yaml"
 _FIXTURE_NAMES = sorted(p.stem for p in _FIXTURES_DIR.glob("*.json"))
 _SIZES = ["feed", "telegram"]
 
-_FACTS_MODELS: dict[str, type[FactPayload]] = {
-    "daily_pnl": DailyPnlFacts,
-    "trade_executed": TradeExecutedFacts,
-}
+# Single source of truth: the pipeline's event-type registry, so a new
+# event type never needs a parallel edit here.
+_FACTS_MODELS: dict[str, type[FactPayload]] = _EVENT_MODELS
 
 
 def _load_fixture(name: str) -> tuple[FactPayload, DesignSpec]:
