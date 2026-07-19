@@ -10,7 +10,7 @@ from factpress.renderer.engine_svg import (
     render_png,
     render_svg,
 )
-from factpress.schemas import DailyPnlFacts, DesignSpec, Tone
+from factpress.schemas import DailyPnlFacts, DesignSpec, SessionDigestFacts, Tone
 
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates" / "daily_pnl"
 BRANDKIT_PATH = Path(__file__).resolve().parent.parent / "brandkits" / "default.yaml"
@@ -248,3 +248,62 @@ def test_as_of_naive_gets_no_utc_label(brandkit):
     view = build_view(facts, make_spec(), brandkit)
     assert view["as_of"] == "18 Jul 2026, 21:30"
     assert "UTC" not in view["as_of"]
+
+
+# ---------------------------------------------------------------------------
+# whitelisted text passthrough (text_lists / text_fields)
+# ---------------------------------------------------------------------------
+
+
+def test_text_lists_and_fields_populated_for_session_digest_facts(brandkit):
+    facts = SessionDigestFacts(
+        session="open",
+        watchlist_symbols=["AAPL", "TSLA", "NVDA"],
+        plan_notes=["Wait for confirmation", "Trim size on gaps"],
+        regime="risk-on",
+        watchlist_count=3,
+    )
+    spec = make_spec(
+        template_id="session_digest",
+        hero_metric_key="watchlist_count",
+        emphasis_keys=[],
+        callout_keys=[],
+    )
+    view = build_view(facts, spec, brandkit)
+    assert view["text_lists"] == {
+        "watchlist_symbols": ["AAPL", "TSLA", "NVDA"],
+        "plan_notes": ["Wait for confirmation", "Trim size on gaps"],
+    }
+    assert view["text_fields"] == {"regime": "risk-on", "session": "open"}
+
+
+def test_text_lists_and_fields_are_empty_dicts_when_absent(brandkit):
+    facts = make_facts()
+    view = build_view(facts, make_spec(), brandkit)
+    assert view["text_lists"] == {}
+    assert view["text_fields"] == {}
+
+
+def test_daily_pnl_view_otherwise_unchanged_by_text_passthrough(brandkit):
+    facts = make_facts()
+    spec = make_spec()
+    view = build_view(facts, spec, brandkit)
+    expected_keys = {
+        "headline",
+        "subhead",
+        "emoji",
+        "hero",
+        "delta_chips",
+        "callouts",
+        "sparkline",
+        "as_of",
+        "footer",
+        "reflection",
+        "text_lists",
+        "text_fields",
+    }
+    assert set(view.keys()) == expected_keys
+    assert view["headline"] == spec.headline
+    assert view["hero"]["label"] == "Daily P&L"
+    assert view["delta_chips"][0]["label"] == "Win rate"
+    assert view["callouts"][0]["label"] == "Trades"

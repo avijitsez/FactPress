@@ -172,6 +172,23 @@ def build_view(facts: FactPayload, spec: DesignSpec, brandkit: dict[str, Any]) -
     if spec.reflection_index is not None and isinstance(candidates, list):
         reflection = _truncate_reflection(candidates[spec.reflection_index])
 
+    # Whitelisted host-authored text passthrough: list/string facts that
+    # don't fit the numeric hero/delta_chips/callouts machinery (e.g.
+    # watchlist symbols, plan notes, regime labels) but still need to reach
+    # templates. Strictly this fixed whitelist -- no per-template logic here.
+    # These are host-authored facts, not LLM copy: the director never
+    # touches them, so the digit-ban / key-resolution guardrail is intact.
+    text_lists = {
+        k: list(getattr(facts, k))
+        for k in ("watchlist_symbols", "plan_notes")
+        if getattr(facts, k, None)
+    }
+    text_fields = {
+        k: str(getattr(facts, k))
+        for k in ("regime", "session", "label")
+        if getattr(facts, k, None)
+    }
+
     return {
         "headline": spec.headline,
         "subhead": spec.subhead,
@@ -183,6 +200,8 @@ def build_view(facts: FactPayload, spec: DesignSpec, brandkit: dict[str, Any]) -
         "as_of": as_of,
         "footer": brandkit["footer"],
         "reflection": reflection,
+        "text_lists": text_lists,
+        "text_fields": text_fields,
     }
 
 

@@ -1,0 +1,27 @@
+{
+  "facts": {
+    "event_type": "session_digest",
+    "session": "close",
+    "realized_pnl_pct": -0.84,
+    "realized_pnl_abs": -412.60,
+    "currency": "USD",
+    "watchlist_symbols": ["AAPL", "TSLA", "NVDA", "MSFT", "AMD"],
+    "regime": "choppy",
+    "hit_count": 3,
+    "miss_count": 2,
+    "as_of": "2026-07-18T20:00:00+00:00"
+  },
+  "spec": {
+    "template_id": "session_digest",
+    "template_version": "1.0.0",
+    "variant": "session_close",
+    "tone": "cautionary",
+    "palette_id": "ember",
+    "hero_metric_key": "realized_pnl_pct",
+    "emphasis_keys": ["hit_count", "miss_count"],
+    "callout_keys": [],
+    "headline": "Session close",
+    "subhead": "Choppy tape, plan mostly held",
+    "sparkline": false
+  }
+}

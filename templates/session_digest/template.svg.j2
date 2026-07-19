@@ -1,0 +1,347 @@
+{#-
+  session_digest — session-open / session-close daily bookend template.
+  Consumes the render context defined in docs/rendering-contract.md:
+  W, H, size ("feed" | "telegram"), spec, brand {fonts, logo_text, watermark,
+  palette}, view {headline, subhead, emoji, hero, delta_chips, callouts,
+  sparkline, as_of, footer, text_lists, text_fields}.
+
+  Two variants, branched on spec.variant:
+  - session_open: regime badge (accent chip), watchlist symbol chips
+    wrapping to rows, plan notes as bulleted muted lines, headline/subhead.
+    Hero is whatever numeric key the director chose (e.g. a watchlist
+    count) -- open has no realized P&L yet.
+  - session_close: realized-P&L hero colored by view.hero.color_role,
+    hit/miss delta chips, optional watchlist echo below.
+
+  text_lists.watchlist_symbols / text_lists.plan_notes and
+  text_fields.regime / text_fields.session are the whitelisted host-authored
+  passthrough fields from build_view -- not LLM copy, so no digit-ban
+  applies to them, but they are still rendered as plain (autoescaped) text,
+  never |safe.
+
+  No formatting logic here -- every numeral in `view` already arrives fully
+  formatted by the renderer. This template only lays things out.
+-#}
+{%- set pal = brand.palette -%}
+{%- set sans = brand.fonts.sans -%}
+{%- set mono = brand.fonts.mono -%}
+{%- set variant = spec.variant -%}
+
+{%- set symbols = view.text_lists.get('watchlist_symbols', []) -%}
+{%- set notes = view.text_lists.get('plan_notes', []) -%}
+{%- set regime = view.text_fields.get('regime') -%}
+
+{%- macro arrow_glyph(d) -%}
+{%- if d == 'up' -%}▲{%- elif d == 'down' -%}▼{%- else -%}●{%- endif -%}
+{%- endmacro -%}
+
+{%- macro dir_color(d) -%}
+{%- if d == 'up' -%}{{ pal.positive }}{%- elif d == 'down' -%}{{ pal.negative }}{%- else -%}{{ pal.muted }}{%- endif -%}
+{%- endmacro -%}
+
+{%- macro hero_fill() -%}
+{%- if view.hero.color_role == 'positive' -%}{{ pal.positive }}{%- elif view.hero.color_role == 'negative' -%}{{ pal.negative }}{%- else -%}{{ pal.fg }}{%- endif -%}
+{%- endmacro -%}
+
+{%- set margin = W * 0.065 -%}
+{%- set safe_w = W - margin * 2 -%}
+{%- set logo_size = [W * 0.020, 16] | max -%}
+{%- set meta_size = [W * 0.0145, 12] | max -%}
+{%- set footer_size = [W * 0.013, 11] | max -%}
+{%- set header_baseline = margin + logo_size -%}
+{%- set badge_h = [H * 0.032, 26] | max -%}
+{%- set badge_size = [W * 0.0155, 12] | max -%}
+
+<svg width="{{ W }}" height="{{ H }}" viewBox="0 0 {{ W }} {{ H }}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="{{ pal.grad_from }}"/>
+      <stop offset="100%" stop-color="{{ pal.grad_to }}"/>
+    </linearGradient>
+    <linearGradient id="accentGradV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="{{ pal.grad_from }}"/>
+      <stop offset="100%" stop-color="{{ pal.grad_to }}"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="{{ W }}" height="{{ H }}" fill="{{ pal.bg }}"/>
+
+  <!-- gradient accent wash: a large soft diagonal shape behind the header -->
+  <rect x="{{ W * 0.30 }}" y="{{ H * -0.22 }}" width="{{ W * 0.95 }}" height="{{ H * 0.5 }}"
+        rx="{{ margin }}" fill="url(#accentGrad)" opacity="0.14"
+        transform="rotate(-10 {{ W / 2 }} {{ H * 0.05 }})"/>
+
+  <!-- brand mark: small gradient accent bar beside the logo text -->
+  <rect x="{{ margin }}" y="{{ header_baseline - logo_size * 0.78 }}"
+        width="{{ logo_size * 0.34 }}" height="{{ logo_size * 0.78 }}"
+        rx="{{ logo_size * 0.12 }}" fill="url(#accentGradV)"/>
+  <text x="{{ margin + logo_size * 0.55 }}" y="{{ header_baseline }}"
+        font-family="{{ sans }}" font-weight="700" font-size="{{ logo_size }}"
+        fill="{{ pal.fg }}">{{ brand.logo_text }}</text>
+
+  {%- if view.as_of %}
+  <text x="{{ W - margin }}" y="{{ header_baseline }}" text-anchor="end"
+        font-family="{{ sans }}" font-weight="400" font-size="{{ meta_size }}"
+        fill="{{ pal.muted }}">{{ view.as_of }}</text>
+  {%- endif %}
+
+{%- if size == 'feed' %}
+{#- ============================== FEED (portrait, stacked) ============================== -#}
+  {%- set headline_size = [W * 0.060, 32] | max -%}
+  {%- set subhead_size = [W * 0.024, 16] | max -%}
+  {%- set hero_label_size = [W * 0.020, 14] | max -%}
+  {%- set hero_value_size = W * 0.130 -%}
+  {%- set chip_h = [H * 0.058, 54] | max -%}
+  {%- set chip_label_size = [W * 0.0145, 11] | max -%}
+  {%- set chip_value_size = [W * 0.021, 15] | max -%}
+  {%- set symbol_chip_h = [H * 0.042, 36] | max -%}
+  {%- set symbol_size = [W * 0.019, 14] | max -%}
+  {%- set note_size = [W * 0.019, 14] | max -%}
+
+  {%- set ns = namespace(y = margin + logo_size + margin * 0.9) -%}
+  {%- set headline_x = margin -%}
+  {%- if view.emoji -%}
+    {%- set emoji_w = headline_size * 1.15 -%}
+    {%- set headline_x = margin + emoji_w -%}
+  {%- endif %}
+  {%- set ns.y = ns.y + headline_size %}
+  {%- if view.emoji %}
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ sans }}" font-size="{{ headline_size }}"
+        fill="{{ pal.fg }}">{{ view.emoji }}</text>
+  {%- endif %}
+  <text x="{{ headline_x }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="800"
+        font-size="{{ headline_size }}" fill="{{ pal.fg }}">{{ view.headline }}</text>
+
+  {%- if view.subhead %}
+  {%- set ns.y = ns.y + subhead_size + margin * 0.35 %}
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ subhead_size }}" fill="{{ pal.muted }}">{{ view.subhead }}</text>
+  {%- endif %}
+
+{%- if variant == 'session_open' %}
+  {#- regime badge, an accent-colored chip -#}
+  {%- if regime %}
+  {%- set ns.y = ns.y + margin * 0.55 %}
+  <rect x="{{ margin }}" y="{{ ns.y }}" width="{{ [regime | length * badge_size * 0.62 + badge_h, badge_h * 2.5] | max }}"
+        height="{{ badge_h }}" rx="{{ badge_h / 2 }}" fill="{{ pal.accent }}" opacity="0.20"/>
+  <text x="{{ margin + badge_h * 0.6 }}" y="{{ ns.y + badge_h * 0.68 }}"
+        font-family="{{ sans }}" font-weight="700" font-size="{{ badge_size }}"
+        fill="{{ pal.accent }}">{{ regime | upper }}</text>
+  {%- set ns.y = ns.y + badge_h + margin * 0.65 %}
+  {%- else %}
+  {%- set ns.y = ns.y + margin * 0.5 %}
+  {%- endif %}
+
+  {#- watchlist symbol chips, wrapping to rows -#}
+  {%- set n_symbols = symbols | length -%}
+  {%- if n_symbols > 0 %}
+  {%- set per_row = 3 -%}
+  {%- set sym_gap = margin * 0.32 -%}
+  {%- set sym_w = (safe_w - sym_gap * (per_row - 1)) / per_row -%}
+  {%- for sym in symbols %}
+  {%- set col = loop.index0 % per_row -%}
+  {%- set row = (loop.index0 / per_row) | int -%}
+  {%- set cx = margin + col * (sym_w + sym_gap) %}
+  {%- set cy = ns.y + row * (symbol_chip_h + sym_gap) %}
+  <rect x="{{ cx }}" y="{{ cy }}" width="{{ sym_w }}" height="{{ symbol_chip_h }}"
+        rx="{{ symbol_chip_h / 2 }}" fill="{{ pal.chip_bg }}"/>
+  <text x="{{ cx + sym_w * 0.5 }}" y="{{ cy + symbol_chip_h * 0.65 }}" text-anchor="middle"
+        font-family="{{ mono }}" font-weight="700" font-size="{{ symbol_size }}"
+        fill="{{ pal.fg }}">{{ sym }}</text>
+  {%- endfor %}
+  {%- set n_rows = ((n_symbols - 1) / per_row) | int + 1 %}
+  {%- set ns.y = ns.y + n_rows * (symbol_chip_h + sym_gap) + margin * 0.35 %}
+  {%- endif %}
+
+  {#- plan notes: bulleted muted lines -#}
+  {%- if notes | length > 0 %}
+  {%- for note in notes %}
+  {%- set ns.y = ns.y + note_size + margin * 0.32 %}
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ note_size }}" fill="{{ pal.muted }}">• {{ note }}</text>
+  {%- endfor %}
+  {%- set ns.y = ns.y + margin * 0.4 %}
+  {%- endif %}
+
+  {#- hero: secondary in the open card (no realized P&L yet) -- deliberately
+      smaller than the close variant's headline hero, since the open card's
+      numeric key is a minor supplement to the watchlist/plan content. -#}
+  {%- set open_hero_size = [W * 0.075, 40] | max -%}
+  {%- set hero_y = [ns.y + open_hero_size * 1.15, H * 0.90] | min %}
+  <text x="{{ margin }}" y="{{ hero_y - open_hero_size * 1.05 }}"
+        font-family="{{ sans }}" font-weight="600" font-size="{{ hero_label_size }}"
+        fill="{{ pal.muted }}">{{ view.hero.label }}</text>
+  <text x="{{ margin }}" y="{{ hero_y }}"
+        font-family="{{ mono }}" font-weight="700" font-size="{{ open_hero_size }}"
+        fill="{{ hero_fill() }}">{{ view.hero.value }}</text>
+
+{%- else %}
+{#- ---------------------------- session_close ---------------------------- -#}
+  {#- hero: realized P&L, the headline figure of the close card -#}
+  {%- set hero_y = H * 0.46 %}
+  <text x="{{ W / 2 }}" y="{{ hero_y - hero_value_size * 0.72 }}" text-anchor="middle"
+        font-family="{{ sans }}" font-weight="600" font-size="{{ hero_label_size }}"
+        fill="{{ pal.muted }}">{{ view.hero.label }}</text>
+  <text x="{{ W / 2 }}" y="{{ hero_y }}" text-anchor="middle"
+        font-family="{{ mono }}" font-weight="700" font-size="{{ hero_value_size }}"
+        fill="{{ hero_fill() }}"><tspan font-size="{{ hero_value_size * 0.5 }}">{{ arrow_glyph(view.hero.direction) }} </tspan>{{ view.hero.value }}</text>
+
+  {%- set ns.y = hero_y + hero_value_size * 0.42 + margin * 0.9 %}
+
+  {#- hit/miss delta chips row -#}
+  {%- set n_chips = view.delta_chips | length -%}
+  {%- if n_chips > 0 %}
+  {%- set chip_gap = margin * 0.4 -%}
+  {%- set chip_w = (safe_w - chip_gap * (n_chips - 1)) / n_chips -%}
+  {%- for chip in view.delta_chips %}
+  {%- set cx = margin + loop.index0 * (chip_w + chip_gap) %}
+  <rect x="{{ cx }}" y="{{ ns.y }}" width="{{ chip_w }}" height="{{ chip_h }}"
+        rx="{{ chip_h / 2 }}" fill="{{ pal.chip_bg }}"/>
+  <text x="{{ cx + chip_w * 0.5 }}" y="{{ ns.y + chip_h * 0.40 }}" text-anchor="middle"
+        font-family="{{ sans }}" font-weight="400" font-size="{{ chip_label_size }}"
+        fill="{{ pal.muted }}">{{ chip.label }}</text>
+  <text x="{{ cx + chip_w * 0.5 }}" y="{{ ns.y + chip_h * 0.76 }}" text-anchor="middle"
+        font-family="{{ mono }}" font-weight="700" font-size="{{ chip_value_size }}"
+        fill="{{ dir_color(chip.direction) }}">{{ arrow_glyph(chip.direction) }} {{ chip.value }}</text>
+  {%- endfor %}
+  {%- set ns.y = ns.y + chip_h + margin * 0.85 %}
+  {%- endif %}
+
+  {#- watchlist echo: optional, a compact single line of the open watchlist -#}
+  {%- if symbols | length > 0 %}
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ chip_label_size }}" fill="{{ pal.muted }}">Watchlist</text>
+  {%- set ns.y = ns.y + chip_value_size + margin * 0.3 %}
+  <text x="{{ margin }}" y="{{ ns.y }}" font-family="{{ mono }}" font-weight="700"
+        font-size="{{ chip_value_size }}" fill="{{ pal.fg }}">{{ symbols | join(' · ') }}</text>
+  {%- endif %}
+{%- endif %}
+
+{%- else %}
+{#- ============================== TELEGRAM (landscape, two-column) ============================== -#}
+  {%- set col_split = W * 0.42 -%}
+  {%- set left_x = margin -%}
+  {%- set left_w = col_split - margin -%}
+  {%- set right_x = col_split + margin * 0.5 -%}
+  {%- set right_w = W - right_x - margin -%}
+
+  {%- set headline_size = [W * 0.036, 24] | max -%}
+  {%- set subhead_size = [W * 0.019, 14] | max -%}
+  {%- set hero_label_size = [W * 0.018, 13] | max -%}
+  {%- set hero_value_size = H * 0.130 -%}
+  {%- set chip_h = [H * 0.11, 40] | max -%}
+  {%- set chip_label_size = [W * 0.0125, 10] | max -%}
+  {%- set chip_value_size = [W * 0.017, 13] | max -%}
+  {%- set symbol_chip_h = [H * 0.075, 30] | max -%}
+  {%- set symbol_size = [W * 0.015, 12] | max -%}
+  {%- set note_size = [W * 0.0155, 12] | max -%}
+
+  {%- set lns = namespace(y = margin + logo_size + margin * 1.1) -%}
+  {%- set lns.y = lns.y + headline_size %}
+  <text x="{{ left_x }}" y="{{ lns.y }}" font-family="{{ sans }}" font-weight="800"
+        font-size="{{ headline_size }}" fill="{{ pal.fg }}">{{ view.headline }}</text>
+
+  {%- if view.subhead %}
+  {%- set lns.y = lns.y + subhead_size + margin * 0.3 %}
+  <text x="{{ left_x }}" y="{{ lns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ subhead_size }}" fill="{{ pal.muted }}">{{ view.subhead }}</text>
+  {%- endif %}
+
+  {#- hero anchored in the lower half of the left column, both variants -#}
+  {%- set hero_y = H * 0.72 %}
+  <text x="{{ left_x }}" y="{{ hero_y - hero_value_size * 0.68 }}"
+        font-family="{{ sans }}" font-weight="600" font-size="{{ hero_label_size }}"
+        fill="{{ pal.muted }}">{{ view.hero.label }}</text>
+  {%- if variant == 'session_close' %}
+  <text x="{{ left_x }}" y="{{ hero_y }}"
+        font-family="{{ mono }}" font-weight="700" font-size="{{ hero_value_size }}"
+        fill="{{ hero_fill() }}"><tspan font-size="{{ hero_value_size * 0.48 }}">{{ arrow_glyph(view.hero.direction) }} </tspan>{{ view.hero.value }}</text>
+  {%- else %}
+  <text x="{{ left_x }}" y="{{ hero_y }}"
+        font-family="{{ mono }}" font-weight="700" font-size="{{ hero_value_size }}"
+        fill="{{ hero_fill() }}">{{ view.hero.value }}</text>
+  {%- endif %}
+
+  {%- set rns = namespace(y = margin + logo_size + margin * 1.1) -%}
+
+{%- if variant == 'session_open' %}
+  {#- regime badge -#}
+  {%- if regime %}
+  {%- set rns.y = rns.y + badge_h %}
+  <rect x="{{ right_x }}" y="{{ rns.y - badge_h }}" width="{{ [regime | length * badge_size * 0.62 + badge_h, badge_h * 2.5] | max }}"
+        height="{{ badge_h }}" rx="{{ badge_h / 2 }}" fill="{{ pal.accent }}" opacity="0.20"/>
+  <text x="{{ right_x + badge_h * 0.6 }}" y="{{ rns.y - badge_h * 0.32 }}"
+        font-family="{{ sans }}" font-weight="700" font-size="{{ badge_size }}"
+        fill="{{ pal.accent }}">{{ regime | upper }}</text>
+  {%- set rns.y = rns.y + margin * 0.55 %}
+  {%- endif %}
+
+  {#- watchlist symbol chips, wrapping to rows in the right column -#}
+  {%- set n_symbols = symbols | length -%}
+  {%- if n_symbols > 0 %}
+  {%- set per_row = 4 -%}
+  {%- set sym_gap = margin * 0.28 -%}
+  {%- set sym_w = (right_w - sym_gap * (per_row - 1)) / per_row -%}
+  {%- for sym in symbols %}
+  {%- set col = loop.index0 % per_row -%}
+  {%- set row = (loop.index0 / per_row) | int -%}
+  {%- set cx = right_x + col * (sym_w + sym_gap) %}
+  {%- set cy = rns.y + row * (symbol_chip_h + sym_gap) %}
+  <rect x="{{ cx }}" y="{{ cy }}" width="{{ sym_w }}" height="{{ symbol_chip_h }}"
+        rx="{{ symbol_chip_h / 2 }}" fill="{{ pal.chip_bg }}"/>
+  <text x="{{ cx + sym_w * 0.5 }}" y="{{ cy + symbol_chip_h * 0.65 }}" text-anchor="middle"
+        font-family="{{ mono }}" font-weight="700" font-size="{{ symbol_size }}"
+        fill="{{ pal.fg }}">{{ sym }}</text>
+  {%- endfor %}
+  {%- set n_rows = ((n_symbols - 1) / per_row) | int + 1 %}
+  {%- set rns.y = rns.y + n_rows * (symbol_chip_h + sym_gap) + margin * 0.3 %}
+  {%- endif %}
+
+  {#- plan notes -#}
+  {%- if notes | length > 0 %}
+  {%- for note in notes %}
+  {%- set rns.y = rns.y + note_size + margin * 0.26 %}
+  <text x="{{ right_x }}" y="{{ rns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ note_size }}" fill="{{ pal.muted }}">• {{ note }}</text>
+  {%- endfor %}
+  {%- endif %}
+
+{%- else %}
+  {#- session_close: hit/miss delta chips stacked in the right column -#}
+  {%- set n_chips = view.delta_chips | length -%}
+  {%- if n_chips > 0 %}
+  {%- set chip_gap = margin * 0.32 -%}
+  {%- for chip in view.delta_chips %}
+  <rect x="{{ right_x }}" y="{{ rns.y }}" width="{{ right_w }}" height="{{ chip_h }}"
+        rx="{{ chip_h / 2 }}" fill="{{ pal.chip_bg }}"/>
+  <text x="{{ right_x + right_w * 0.5 }}" y="{{ rns.y + chip_h * 0.40 }}" text-anchor="middle"
+        font-family="{{ sans }}" font-weight="400" font-size="{{ chip_label_size }}"
+        fill="{{ pal.muted }}">{{ chip.label }}</text>
+  <text x="{{ right_x + right_w * 0.5 }}" y="{{ rns.y + chip_h * 0.78 }}" text-anchor="middle"
+        font-family="{{ mono }}" font-weight="700" font-size="{{ chip_value_size }}"
+        fill="{{ dir_color(chip.direction) }}">{{ arrow_glyph(chip.direction) }} {{ chip.value }}</text>
+  {%- set rns.y = rns.y + chip_h + chip_gap %}
+  {%- endfor %}
+  {%- endif %}
+
+  {#- watchlist echo: optional -#}
+  {%- if symbols | length > 0 %}
+  {%- set rns.y = rns.y + margin * 0.25 %}
+  <text x="{{ right_x }}" y="{{ rns.y }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ chip_label_size }}" fill="{{ pal.muted }}">Watchlist</text>
+  {%- set rns.y = rns.y + chip_value_size + margin * 0.28 %}
+  <text x="{{ right_x }}" y="{{ rns.y }}" font-family="{{ mono }}" font-weight="700"
+        font-size="{{ chip_value_size }}" fill="{{ pal.fg }}">{{ symbols | join(' · ') }}</text>
+  {%- endif %}
+{%- endif %}
+{%- endif %}
+
+  <!-- footer + watermark -->
+  <text x="{{ margin }}" y="{{ H - margin * 0.55 }}" font-family="{{ sans }}" font-weight="400"
+        font-size="{{ footer_size }}" fill="{{ pal.muted }}">{{ view.footer }}</text>
+  {%- if brand.watermark %}
+  <text x="{{ W - margin }}" y="{{ H - margin * 0.55 }}" text-anchor="end"
+        font-family="{{ sans }}" font-weight="700" font-size="{{ footer_size }}"
+        fill="{{ pal.muted }}" opacity="0.6">{{ brand.logo_text }}</text>
+  {%- endif %}
+</svg>
