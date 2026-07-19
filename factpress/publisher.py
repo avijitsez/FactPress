@@ -20,12 +20,16 @@ and never carrying the bot token in their message.
 
 from __future__ import annotations
 
+import json
+import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable
 
 import httpx
+
+logger = logging.getLogger("factpress.publisher")
 
 _TELEGRAM_API = "https://api.telegram.org"
 _MAX_CAPTION_LEN = 1024
@@ -114,6 +118,64 @@ class Publisher:
     def _endpoint(self) -> str:
         return f"{_TELEGRAM_API}/bot{self.config.token}/sendPhoto"
 
+    def _edit_media_endpoint(self) -> str:
+        return f"{_TELEGRAM_API}/bot{self.config.token}/editMessageMedia"
+
+    def _answer_callback_endpoint(self) -> str:
+        return f"{_TELEGRAM_API}/bot{self.config.token}/answerCallbackQuery"
+
+    def _client_kwargs(self) -> dict[str, Any]:
+        client_kwargs: dict[str, Any] = {}
+        if self._transport is not None:
+            client_kwargs["transport"] = self._transport
+        return client_kwargs
+
+    def _send_multipart(
+        self, endpoint: str, data: dict[str, Any], files: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Shared retry/backoff loop for Telegram multipart calls.
+
+        Used by both :meth:`send_photo` (F2.1) and :meth:`edit_message_media`
+        (F5.4) so the two share one retry policy: 429 honors Telegram's
+        ``retry_after``, 5xx gets capped exponential backoff, any other 4xx
+        raises immediately as non-retryable. Returns the parsed ``result``
+        payload on success.
+        """
+        with httpx.Client(**self._client_kwargs()) as client:
+            attempt = 0
+            while True:
+                try:
+                    response = client.post(
+                        endpoint, data=data, files=files, timeout=self.config.timeout_s
+                    )
+                except httpx.HTTPError as exc:
+                    # httpx exception text can embed the request URL, which
+                    # contains the bot token — sanitize before re-raising so
+                    # the token can never reach logs or tracebacks.
+                    sanitized = str(exc).replace(self.config.token, "***")
+                    raise PublishError(
+                        0, f"transport error: {type(exc).__name__}: {sanitized}"
+                    ) from None
+                if response.status_code == 200:
+                    payload = response.json()
+                    return payload["result"]
+
+                description = _error_description(response)
+
+                retryable = response.status_code == 429 or response.status_code >= 500
+                if not retryable:
+                    raise PublishError(response.status_code, description)
+
+                if attempt >= self.config.max_retries:
+                    raise PublishError(response.status_code, description)
+
+                if response.status_code == 429:
+                    delay = _retry_after(response)
+                else:
+                    delay = _BACKOFF_SCHEDULE[min(attempt, len(_BACKOFF_SCHEDULE) - 1)]
+                _sleep(delay)
+                attempt += 1
+
     def _resolve_silent(self, silent: bool | None) -> bool:
         if silent is not None:
             return silent
@@ -129,6 +191,7 @@ class Publisher:
         chat_id: int | str | None = None,
         thread_id: int | None = None,
         silent: bool | None = None,
+        reply_markup: dict[str, Any] | None = None,
     ) -> MessageRef:
         resolved_chat_id = chat_id if chat_id is not None else self.config.default_chat_id
         if resolved_chat_id is None:
@@ -149,53 +212,86 @@ class Publisher:
             data["message_thread_id"] = thread_id
         if self._resolve_silent(silent):
             data["disable_notification"] = "true"
+        if reply_markup is not None:
+            data["reply_markup"] = json.dumps(reply_markup)
 
         files = {"photo": ("card.png", png, "image/png")}
 
-        client_kwargs: dict[str, Any] = {}
-        if self._transport is not None:
-            client_kwargs["transport"] = self._transport
+        result = self._send_multipart(self._endpoint(), data, files)
+        return MessageRef(
+            chat_id=resolved_chat_id, message_id=result["message_id"], thread_id=thread_id
+        )
 
-        with httpx.Client(**client_kwargs) as client:
-            attempt = 0
-            while True:
-                try:
-                    response = client.post(
-                        self._endpoint(),
-                        data=data,
-                        files=files,
-                        timeout=self.config.timeout_s,
-                    )
-                except httpx.HTTPError as exc:
-                    # httpx exception text can embed the request URL, which
-                    # contains the bot token — sanitize before re-raising so
-                    # the token can never reach logs or tracebacks.
-                    sanitized = str(exc).replace(self.config.token, "***")
-                    raise PublishError(
-                        0, f"transport error: {type(exc).__name__}: {sanitized}"
-                    ) from None
-                if response.status_code == 200:
-                    payload = response.json()
-                    message_id = payload["result"]["message_id"]
-                    return MessageRef(
-                        chat_id=resolved_chat_id, message_id=message_id, thread_id=thread_id
-                    )
+    def edit_message_media(
+        self,
+        png: bytes,
+        *,
+        chat_id: int | str,
+        message_id: int,
+        caption: str | None = None,
+        reply_markup: dict[str, Any] | None = None,
+    ) -> None:
+        """Replace a published photo's image via Telegram's ``editMessageMedia``
+        (F5.4, second visual ack / decision-state re-render).
 
-                description = _error_description(response)
+        Uses the standard multipart ``attach://`` pattern: the new PNG rides
+        as a file part named ``photo``, and the JSON-encoded ``media`` field
+        references it via ``"media": "attach://photo"``. Telegram leaves an
+        existing inline keyboard in place when ``reply_markup`` is omitted
+        from an edit call, so a caller that means to *remove* the keyboard
+        (every state-layer transition in §7 does) must pass an explicit
+        empty one -- which is exactly what happens here when
+        ``reply_markup=None``: it is not omitted, it is sent as
+        ``{"inline_keyboard": []}``.
+        """
+        if caption is not None and len(caption) > _MAX_CAPTION_LEN:
+            raise ValueError(
+                f"caption is {len(caption)} chars, exceeds Telegram's {_MAX_CAPTION_LEN}-char "
+                "limit (not truncated -- shorten it explicitly)"
+            )
 
-                retryable = response.status_code == 429 or response.status_code >= 500
-                if not retryable:
-                    raise PublishError(response.status_code, description)
+        media: dict[str, Any] = {"type": "photo", "media": "attach://photo"}
+        if caption is not None:
+            media["caption"] = caption
 
-                if attempt >= self.config.max_retries:
-                    raise PublishError(response.status_code, description)
+        data: dict[str, Any] = {
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "media": json.dumps(media),
+            "reply_markup": json.dumps(reply_markup if reply_markup is not None else {"inline_keyboard": []}),
+        }
+        files = {"photo": ("card.png", png, "image/png")}
 
-                if response.status_code == 429:
-                    delay = _retry_after(response)
-                else:
-                    delay = _BACKOFF_SCHEDULE[min(attempt, len(_BACKOFF_SCHEDULE) - 1)]
-                _sleep(delay)
-                attempt += 1
+        self._send_multipart(self._edit_media_endpoint(), data, files)
+
+    def answer_callback_query(
+        self, callback_query_id: str, text: str, *, show_alert: bool = False
+    ) -> None:
+        """Fire-and-forget Telegram ``answerCallbackQuery`` toast (F5.4).
+
+        This is deliberately not routed through :meth:`_send_multipart`'s
+        retry policy: it is not a multipart call (no file), and per the
+        ticket a toast failing must never crash callback handling -- HTTP
+        error responses and transport errors are logged and swallowed here,
+        never raised.
+        """
+        data: dict[str, Any] = {"callback_query_id": callback_query_id, "text": text}
+        if show_alert:
+            data["show_alert"] = "true"
+        try:
+            with httpx.Client(**self._client_kwargs()) as client:
+                response = client.post(
+                    self._answer_callback_endpoint(), data=data, timeout=self.config.timeout_s
+                )
+            if response.status_code != 200:
+                logger.warning(
+                    "answerCallbackQuery failed: %s %s",
+                    response.status_code,
+                    _error_description(response),
+                )
+        except httpx.HTTPError as exc:
+            sanitized = str(exc).replace(self.config.token, "***")
+            logger.warning("answerCallbackQuery transport error: %s", sanitized)
 
 
 def _error_description(response: httpx.Response) -> str:

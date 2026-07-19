@@ -314,6 +314,39 @@ class PendingStore:
         approval = _row_to_approval(row)
         return None if approval.status == "expired" else approval
 
+    def update_message_id(self, token: str, message_id: int) -> PendingApproval | None:
+        """Patch in the real Telegram ``message_id`` once ``send_photo``
+        returns it (F5.3).
+
+        The pending row is created with a ``message_id=0`` placeholder
+        *before* the send, because the single-use token must already exist
+        to put on the card's inline-keyboard buttons -- but the token's own
+        row wants the message id to persist alongside it, and that id
+        doesn't exist until after the send completes. Guarded to 'pending'
+        rows only; a no-op (``None``) for an unknown token or one no longer
+        'pending'.
+        """
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            cur = conn.execute(
+                "UPDATE pending_approvals SET message_id = ? WHERE token = ? AND status = 'pending'",
+                (message_id, token),
+            )
+            if cur.rowcount == 0:
+                conn.execute("COMMIT")
+                return None
+            row = conn.execute(
+                "SELECT * FROM pending_approvals WHERE token = ?", (token,)
+            ).fetchone()
+            conn.execute("COMMIT")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
+        finally:
+            conn.close()
+        return _row_to_approval(row)
+
     def mark_finalized(
         self, token: str, *, decision_note: str | None = None
     ) -> PendingApproval | None:

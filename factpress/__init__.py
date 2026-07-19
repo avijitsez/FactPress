@@ -19,8 +19,17 @@ import httpx
 
 from factpress import pipeline
 from factpress.director import Director, DirectorConfig, fallback_spec
+from factpress.interactive.api import DecisionResult, InteractiveManager
+from factpress.interactive.store import PendingApproval, PendingStore
 from factpress.publisher import MessageRef, PublishError, Publisher, PublisherConfig
-from factpress.schemas import DailyPnlFacts, DesignSpec, FactPayload, TradeExecutedFacts
+from factpress.schemas import (
+    CardState,
+    DailyPnlFacts,
+    DesignSpec,
+    FactPayload,
+    StateInfo,
+    TradeExecutedFacts,
+)
 
 __version__ = "0.1.0"
 
@@ -35,6 +44,12 @@ __all__ = [
     "Director",
     "DirectorConfig",
     "fallback_spec",
+    "CardState",
+    "StateInfo",
+    "InteractiveManager",
+    "DecisionResult",
+    "PendingApproval",
+    "PendingStore",
     "__version__",
 ]
 
@@ -65,12 +80,14 @@ class FactPress:
         brandkit: dict[str, Any] | str | Path | None = None,
         template_paths: list[str | Path] | None = None,
         silent_hours: tuple[int, int] | None = None,
+        pending_store: str | Path = "factpress_pending.sqlite3",
         *,
         _director_transport: httpx.BaseTransport | None = None,
         _publisher_transport: httpx.BaseTransport | None = None,
     ) -> None:
         self._brandkit = brandkit
         self._template_paths = template_paths
+        self._pending_store_path = pending_store
 
         self._director: Director | None = None
         if llm_base_url and llm_model:
@@ -87,6 +104,11 @@ class FactPress:
                 silent_hours=silent_hours,
             )
             self._publisher = Publisher(publisher_config, transport=_publisher_transport)
+
+        # F5: the pending-approvals store + InteractiveManager are built
+        # lazily on first interactive-method use (see _get_interactive), so
+        # constructing a FactPress never touches disk for pending_store.
+        self._interactive: InteractiveManager | None = None
 
     def render(
         self,
@@ -138,3 +160,84 @@ class FactPress:
             thread_id=thread_id,
             silent=silent,
         )
+
+    def _get_interactive(self) -> InteractiveManager:
+        """Lazily construct the one :class:`InteractiveManager` this facade
+        uses, and with it the on-disk :class:`PendingStore` -- deferred
+        until an interactive method is actually called, so a plain
+        ``FactPress()`` (or one only used for ``render``/``publish``) never
+        creates the pending-store sqlite file.
+        """
+        if self._interactive is None:
+            if self._publisher is None:
+                raise RuntimeError(
+                    "interactive approval methods require a telegram_token; "
+                    "construct FactPress(telegram_token=..., ...)."
+                )
+            store = PendingStore(self._pending_store_path)
+            self._interactive = InteractiveManager(
+                store,
+                self._publisher,
+                template_paths=self._template_paths,
+                brandkit=self._brandkit,
+            )
+        return self._interactive
+
+    def publish_interactive(
+        self,
+        facts: FactPayload | dict[str, Any],
+        event_type: str,
+        *,
+        actions: list[tuple[str, str]],
+        authorized_users: list[int],
+        timeout_s: float,
+        default_action: str,
+        on_decision: Any = None,
+        chat_id: int | str | None = None,
+        thread_id: int | None = None,
+        size: str = "telegram",
+    ) -> PendingApproval:
+        """Publish an interactive approval card. See
+        ``FACTPRESS_DESIGN.md`` §7 and :meth:`InteractiveManager.publish_interactive`.
+        """
+        return self._get_interactive().publish_interactive(
+            facts,
+            event_type,
+            actions=actions,
+            authorized_users=authorized_users,
+            timeout_s=timeout_s,
+            default_action=default_action,
+            on_decision=on_decision,
+            chat_id=chat_id,
+            thread_id=thread_id,
+            director=self._director,
+            size=size,
+        )
+
+    def handle_callback(self, update: dict[str, Any]) -> DecisionResult | None:
+        """Handle one Telegram callback_query update. See
+        :meth:`InteractiveManager.handle_callback`."""
+        return self._get_interactive().handle_callback(update)
+
+    def update_state(
+        self,
+        token_or_approval: str | PendingApproval,
+        *,
+        state: str,
+        facts_patch: dict[str, Any] | None = None,
+        note: str | None = None,
+    ) -> None:
+        """Second visual ack. See :meth:`InteractiveManager.update_state`."""
+        self._get_interactive().update_state(
+            token_or_approval, state=state, facts_patch=facts_patch, note=note
+        )
+
+    def check_expired(self, now: Any = None) -> list[str]:
+        """Sweep + re-render timed-out cards. See
+        :meth:`InteractiveManager.check_expired`."""
+        return self._get_interactive().check_expired(now=now)
+
+    def resume_after_restart(self, now: Any = None) -> list[str]:
+        """Startup sweep for restart-orphaned cards. See
+        :meth:`InteractiveManager.resume_after_restart`."""
+        return self._get_interactive().resume_after_restart(now=now)
