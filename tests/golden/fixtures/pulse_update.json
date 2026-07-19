@@ -1,0 +1,23 @@
+{
+  "facts": {
+    "event_type": "pulse_update",
+    "mode_pnl_pct": 0.42,
+    "open_positions_count": 3,
+    "orders_used_count": 7,
+    "orders_cap_count": 10,
+    "series": [100.0, 100.3, 100.1, 100.5, 100.4, 100.7, 100.6, 100.9],
+    "as_of": "2026-07-18T15:00:00+00:00"
+  },
+  "spec": {
+    "template_id": "pulse_update",
+    "template_version": "1.0.0",
+    "tone": "neutral",
+    "palette_id": "midnight",
+    "hero_metric_key": "mode_pnl_pct",
+    "emphasis_keys": ["open_positions_count", "orders_used_count"],
+    "callout_keys": ["orders_cap_count"],
+    "headline": "Hourly pulse steady",
+    "subhead": "Aggressive lane, no change since last check",
+    "sparkline": true
+  }
+}
